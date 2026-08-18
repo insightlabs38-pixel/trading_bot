@@ -223,7 +223,9 @@ def _validate_symbol_change_action(
         raise ValueError("symbol change action requires prior symbol history")
     prior = max(prior_periods, key=lambda period: period.end_date or period.start_date)
     if prior.symbol != action.old_symbol:
-        raise ValueError("symbol change action old_symbol must match immediately prior symbol history")
+        raise ValueError(
+            "symbol change action old_symbol must match immediately prior symbol history"
+        )
 
 
 def _assert_non_overlapping(periods: list[SymbolPeriod], message: str) -> None:
