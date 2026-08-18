@@ -131,17 +131,33 @@ Python 3.12 CPU environment cannot be installed in this sandbox because outbound
 blocked. The reference feature contract is validated; production-scale columnar throughput must be
 validated externally after the intended CPU dependencies are available.
 
+## Labels
+
+- [x] 5-minute future-return target.
+- [x] 15-minute future-return target.
+- [x] 30-minute future-return target.
+- [x] 60-minute future-return target.
+- [x] Future excess return relative to an explicitly configured market/reference security.
+- [x] Direction labels.
+- [x] Cross-sectional rank targets per decision timestamp/horizon.
+- [x] Future realized-volatility target.
+- [x] Quantile/distributional rank targets.
+- [x] Exact future endpoints are required; missing bars are not interpolated across gaps/sessions.
+- [x] Label generation is a separate module and never imports or calls the feature pipeline.
+- [x] Extending data beyond an already defined horizon does not alter that existing target.
+
 ## Validation performed
 
 All implemented Phase 3 data-contract tests plus the complete Phase 2 storage suite pass in the
 dedicated sandbox venv:
 
 ```text
-94 passed
+101 passed
 ```
 
 `compileall` passes and all new files satisfy the repository's 100-character line-length policy.
 Git blob hashes are checked against the exact sandbox-tested files before section merge.
 
-The columnar-performance blocker does not prevent the next section, **Labels**, from being
-implemented and tested against synthetic panel fixtures.
+The next implementable section is **Splits**. Actual production fold/holdout dates will remain
+unfrozen until the production dataset period is finalized, but the immutable split-manifest and
+final-holdout access guard can be implemented and tested now.
