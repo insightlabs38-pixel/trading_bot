@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -28,10 +29,12 @@ class LiquidityObservation:
     def __post_init__(self) -> None:
         if not self.security_id.strip():
             raise ValueError("security_id must not be blank")
-        if self.close_price <= 0:
-            raise ValueError("close_price must be positive")
-        if self.volume < 0:
-            raise ValueError("volume must be non-negative")
+        if not math.isfinite(self.close_price) or self.close_price <= 0:
+            raise ValueError("close_price must be finite and positive")
+        if not math.isfinite(self.volume) or self.volume < 0:
+            raise ValueError("volume must be finite and non-negative")
+        if not math.isfinite(self.close_price * self.volume):
+            raise ValueError("dollar volume must be finite")
 
     @property
     def dollar_volume(self) -> float:
@@ -60,8 +63,9 @@ class UniversePolicy:
             raise ValueError(
                 "minimum_history_observations must be between 1 and trailing_observations"
             )
-        if self.minimum_price < 0 or self.minimum_average_dollar_volume < 0:
-            raise ValueError("minimum price/liquidity thresholds must be non-negative")
+        thresholds = (self.minimum_price, self.minimum_average_dollar_volume)
+        if any(not math.isfinite(value) or value < 0 for value in thresholds):
+            raise ValueError("minimum price/liquidity thresholds must be finite and non-negative")
 
     def canonical_json(self) -> str:
         return json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
@@ -102,9 +106,17 @@ def build_universe_snapshot(
 ) -> UniverseSnapshot:
     """Select eligible names using only information strictly before ``as_of``."""
     historical: dict[str, list[LiquidityObservation]] = defaultdict(list)
+    seen_observations: set[tuple[str, date]] = set()
     for observation in observations:
-        if observation.observation_date < as_of:
-            historical[observation.security_id].append(observation)
+        if observation.observation_date >= as_of:
+            continue
+        identity = (observation.security_id, observation.observation_date)
+        if identity in seen_observations:
+            raise UniverseConstructionError(
+                "duplicate security/date liquidity observations cannot be ranked"
+            )
+        seen_observations.add(identity)
+        historical[observation.security_id].append(observation)
 
     candidates: list[tuple[str, str, float, float, int]] = []
     for security in security_master.active_common_equities(as_of):
@@ -121,6 +133,8 @@ def build_universe_snapshot(
         if latest_price < policy.minimum_price:
             continue
         average_dollar_volume = sum(item.dollar_volume for item in trailing) / len(trailing)
+        if not math.isfinite(average_dollar_volume):
+            raise UniverseConstructionError("average dollar volume must remain finite")
         if average_dollar_volume < policy.minimum_average_dollar_volume:
             continue
         try:
