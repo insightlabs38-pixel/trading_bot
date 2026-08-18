@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import (
-    BaseModel,
-    ConfigDict,
     Field,
+    JsonValue,
     PositiveFloat,
     PositiveInt,
     SecretStr,
@@ -15,11 +14,11 @@ from pydantic import (
     model_validator,
 )
 
+from trading_bot.config.base import FrozenConfigModel
 
-class StrictConfigModel(BaseModel):
-    """Base for immutable configuration objects that reject unknown fields."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
+class StrictConfigModel(FrozenConfigModel):
+    """Semantic alias for project configuration sections."""
 
 
 class StorageConfig(StrictConfigModel):
@@ -38,10 +37,13 @@ class StorageConfig(StrictConfigModel):
 
     @model_validator(mode="after")
     def validate_backend_requirements(self) -> StorageConfig:
-        """Require the location fields needed by each storage backend."""
-        if self.backend == "local" and not self.root_path:
-            raise ValueError("local storage requires root_path")
-        if self.backend == "s3" and not self.bucket:
+        """Require an unambiguous location for the selected backend."""
+        if self.backend == "local":
+            if not self.root_path:
+                raise ValueError("local storage requires root_path")
+            if self.bucket is not None:
+                raise ValueError("local storage must not define bucket")
+        elif not self.bucket:
             raise ValueError("s3 storage requires bucket")
         return self
 
@@ -94,7 +96,7 @@ class ModelConfig(StrictConfigModel):
     family: str = Field(min_length=1)
     variant: str = Field(default="default", min_length=1)
     heads: tuple[ModelHead, ...] = ("return", "rank", "volatility")
-    parameters: dict[str, Any] = Field(default_factory=dict)
+    parameters: dict[str, JsonValue] = Field(default_factory=dict)
 
     @field_validator("heads")
     @classmethod
@@ -150,24 +152,46 @@ class ObjectiveConfig(StrictConfigModel):
             raise ValueError("task weights must be non-negative")
         return value
 
+    @model_validator(mode="after")
+    def validate_multitask_weights(self) -> ObjectiveConfig:
+        if self.kind == "multitask" and not self.task_weights:
+            raise ValueError("multitask objective requires task_weights")
+        return self
+
 
 class EvaluationConfig(StrictConfigModel):
     """Frozen economic-evaluation assumptions used during a campaign."""
 
     annualization_days: PositiveInt = 252
     risk_free_rate_annual: float = 0.0
-    fee_bps: float = Field(default=0.0, ge=0.0)
-    slippage_bps: float = Field(default=0.0, ge=0.0)
-    impact_bps: float = Field(default=0.0, ge=0.0)
+    fee_bps: float = Field(ge=0.0)
+    spread_bps: float = Field(ge=0.0)
+    slippage_bps: float = Field(ge=0.0)
+    impact_bps: float = Field(ge=0.0)
     cost_stress_multipliers: tuple[PositiveFloat, ...] = (1.0, 1.25, 1.5, 2.0)
     latency_stress_seconds: tuple[float, ...] = (0.0, 0.25, 1.0, 5.0, 15.0, 30.0)
     minimum_positive_fold_fraction: float = Field(default=0.70, ge=0.0, le=1.0)
 
+    @field_validator("cost_stress_multipliers")
+    @classmethod
+    def cost_stress_grid_must_be_valid(cls, value: tuple[float, ...]) -> tuple[float, ...]:
+        if not value:
+            raise ValueError("cost stress grid must not be empty")
+        if len(set(value)) != len(value):
+            raise ValueError("cost stress multipliers must be unique")
+        if 1.0 not in value:
+            raise ValueError("cost stress multipliers must include the 1.0 baseline")
+        return value
+
     @field_validator("latency_stress_seconds")
     @classmethod
-    def latency_values_must_be_nonnegative(cls, value: tuple[float, ...]) -> tuple[float, ...]:
+    def latency_values_must_be_valid(cls, value: tuple[float, ...]) -> tuple[float, ...]:
+        if not value:
+            raise ValueError("latency stress grid must not be empty")
         if any(delay < 0 for delay in value):
             raise ValueError("latency stress values must be non-negative")
+        if len(set(value)) != len(value):
+            raise ValueError("latency stress values must be unique")
         return value
 
 
@@ -190,6 +214,13 @@ class CampaignConfig(StrictConfigModel):
         if len(set(value)) != len(value):
             raise ValueError("campaign seeds must be unique")
         return value
+
+    @model_validator(mode="after")
+    def experiment_pools_must_not_overlap(self) -> CampaignConfig:
+        overlap = set(self.mandatory_families) & set(self.optional_families)
+        if overlap:
+            raise ValueError(f"mandatory and optional families overlap: {sorted(overlap)}")
+        return self
 
 
 class SchedulerConfig(StrictConfigModel):
@@ -228,43 +259,103 @@ class NotificationsConfig(StrictConfigModel):
 
 
 class AIRepairConfig(StrictConfigModel):
-    """Sandboxed AI repair escalation settings."""
+    """Sandboxed AI repair escalation settings without a hardcoded provider."""
 
     enabled: bool = False
-    provider: Literal["deepseek"] = "deepseek"
-    model: str = "deepseek-v4-flash"
-    api_base_url: str = "https://api.deepseek.com"
+    provider: str | None = None
+    model: str | None = None
+    api_base_url: str | None = None
     api_key: SecretStr | None = None
     primary_timeout_seconds: PositiveInt = 45
-    thinking_timeout_seconds: PositiveInt = 120
+    reasoning_timeout_seconds: PositiveInt = 120
     max_repair_attempts: int = Field(default=2, ge=0, le=5)
     allow_reasoning_escalation: bool = True
 
     @model_validator(mode="after")
-    def api_key_required_when_enabled(self) -> AIRepairConfig:
-        if self.enabled and self.api_key is None:
-            raise ValueError("api_key is required when AI repair is enabled")
+    def provider_configuration_required_when_enabled(self) -> AIRepairConfig:
+        if not self.enabled:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("provider", self.provider),
+                ("model", self.model),
+                ("api_key", self.api_key),
+            )
+            if value is None
+        ]
+        if missing:
+            raise ValueError(f"AI repair requires enabled provider settings: {', '.join(missing)}")
         return self
 
 
 class PaperLiveRiskConfig(StrictConfigModel):
-    """Deterministic paper/live risk limits."""
+    """Deterministic paper/live risk controls with deliberately unfrozen numeric limits."""
 
-    max_position_weight: float = Field(default=0.02, gt=0.0, le=1.0)
-    max_gross_exposure: float = Field(default=1.0, gt=0.0)
-    max_abs_net_exposure: float = Field(default=0.20, ge=0.0)
-    max_order_nav_fraction: float = Field(default=0.01, gt=0.0, le=1.0)
-    daily_loss_limit_fraction: float = Field(default=0.02, gt=0.0, le=1.0)
-    max_data_age_seconds: PositiveInt = 90
-    max_outstanding_orders: PositiveInt = 50
+    enabled: bool = False
+    max_position_weight: float | None = Field(default=None, gt=0.0, le=1.0)
+    max_gross_exposure: float | None = Field(default=None, gt=0.0)
+    max_abs_net_exposure: float | None = Field(default=None, ge=0.0)
+    max_leverage: float | None = Field(default=None, gt=0.0)
+    max_order_nav_fraction: float | None = Field(default=None, gt=0.0, le=1.0)
+    max_participation_rate: float | None = Field(default=None, gt=0.0, le=1.0)
+    daily_loss_limit_fraction: float | None = Field(default=None, gt=0.0, le=1.0)
+    drawdown_stop_fraction: float | None = Field(default=None, gt=0.0, le=1.0)
+    max_data_age_seconds: PositiveInt | None = None
+    model_inference_timeout_seconds: PositiveInt | None = None
+    max_outstanding_orders: PositiveInt | None = None
+    require_broker_reconciliation: bool = True
+    duplicate_order_protection: bool = True
+    session_checks: bool = True
     kill_switch_enabled: bool = True
 
     @model_validator(mode="after")
-    def validate_exposure_relationships(self) -> PaperLiveRiskConfig:
+    def validate_risk_controls(self) -> PaperLiveRiskConfig:
+        """Require explicit numeric limits before paper/live risk controls are enabled."""
+        if not self.enabled:
+            return self
+
+        required_numeric = {
+            "max_position_weight": self.max_position_weight,
+            "max_gross_exposure": self.max_gross_exposure,
+            "max_abs_net_exposure": self.max_abs_net_exposure,
+            "max_leverage": self.max_leverage,
+            "max_order_nav_fraction": self.max_order_nav_fraction,
+            "max_participation_rate": self.max_participation_rate,
+            "daily_loss_limit_fraction": self.daily_loss_limit_fraction,
+            "drawdown_stop_fraction": self.drawdown_stop_fraction,
+            "max_data_age_seconds": self.max_data_age_seconds,
+            "model_inference_timeout_seconds": self.model_inference_timeout_seconds,
+            "max_outstanding_orders": self.max_outstanding_orders,
+        }
+        missing = [name for name, value in required_numeric.items() if value is None]
+        if missing:
+            raise ValueError(
+                "enabled paper/live risk config requires explicit limits: " + ", ".join(missing)
+            )
+
+        if not all(
+            (
+                self.require_broker_reconciliation,
+                self.duplicate_order_protection,
+                self.session_checks,
+                self.kill_switch_enabled,
+            )
+        ):
+            raise ValueError(
+                "enabled paper/live risk config requires all deterministic safety gates"
+            )
+
+        assert self.max_position_weight is not None
+        assert self.max_gross_exposure is not None
+        assert self.max_abs_net_exposure is not None
+        assert self.max_leverage is not None
         if self.max_position_weight > self.max_gross_exposure:
             raise ValueError("max_position_weight cannot exceed max_gross_exposure")
         if self.max_abs_net_exposure > self.max_gross_exposure:
             raise ValueError("max_abs_net_exposure cannot exceed max_gross_exposure")
+        if self.max_gross_exposure > self.max_leverage:
+            raise ValueError("max_gross_exposure cannot exceed max_leverage")
         return self
 
 
