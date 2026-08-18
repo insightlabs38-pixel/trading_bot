@@ -1,0 +1,196 @@
+"""Point-in-time security-master, symbol history, and corporate-action contracts."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from datetime import date
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class SecurityType(StrEnum):
+    COMMON_STOCK = "common_stock"
+    ADR = "adr"
+    ETF = "etf"
+    PREFERRED = "preferred"
+    OTHER = "other"
+
+
+class CorporateActionType(StrEnum):
+    SPLIT = "split"
+    CASH_DIVIDEND = "cash_dividend"
+    SYMBOL_CHANGE = "symbol_change"
+    MERGER = "merger"
+    SPINOFF = "spinoff"
+    OTHER = "other"
+
+
+class SecurityRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    security_id: str = Field(min_length=1)
+    security_type: SecurityType
+    exchange: str = Field(min_length=1)
+    listing_date: date
+    delisting_date: date | None = None
+    issuer_name: str | None = None
+    sector: str | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> SecurityRecord:
+        if self.delisting_date is not None and self.delisting_date < self.listing_date:
+            raise ValueError("delisting_date cannot precede listing_date")
+        return self
+
+    def is_listed_on(self, as_of: date) -> bool:
+        return self.listing_date <= as_of and (
+            self.delisting_date is None or as_of <= self.delisting_date
+        )
+
+
+class SymbolPeriod(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    security_id: str = Field(min_length=1)
+    symbol: str = Field(min_length=1)
+    start_date: date
+    end_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> SymbolPeriod:
+        if self.end_date is not None and self.end_date < self.start_date:
+            raise ValueError("symbol period end_date cannot precede start_date")
+        return self
+
+    def contains(self, as_of: date) -> bool:
+        return self.start_date <= as_of and (self.end_date is None or as_of <= self.end_date)
+
+
+class CorporateAction(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    security_id: str = Field(min_length=1)
+    action_type: CorporateActionType
+    effective_date: date
+    split_ratio: float | None = Field(default=None, gt=0)
+    cash_amount: float | None = Field(default=None, ge=0)
+    old_symbol: str | None = None
+    new_symbol: str | None = None
+    source_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_action_fields(self) -> CorporateAction:
+        if self.action_type == CorporateActionType.SPLIT and self.split_ratio is None:
+            raise ValueError("split action requires split_ratio")
+        if self.action_type == CorporateActionType.CASH_DIVIDEND and self.cash_amount is None:
+            raise ValueError("cash dividend action requires cash_amount")
+        if self.action_type == CorporateActionType.SYMBOL_CHANGE:
+            if not self.old_symbol or not self.new_symbol:
+                raise ValueError("symbol change requires old_symbol and new_symbol")
+        return self
+
+
+class SecurityMaster(BaseModel):
+    """Immutable point-in-time reference dataset keyed by permanent security ID."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: str = Field(min_length=1)
+    securities: tuple[SecurityRecord, ...]
+    symbols: tuple[SymbolPeriod, ...]
+    corporate_actions: tuple[CorporateAction, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_consistency(self) -> SecurityMaster:
+        records = {record.security_id: record for record in self.securities}
+        if len(records) != len(self.securities):
+            raise ValueError("security IDs must be unique")
+
+        periods_by_security: dict[str, list[SymbolPeriod]] = defaultdict(list)
+        periods_by_symbol: dict[str, list[SymbolPeriod]] = defaultdict(list)
+        for period in self.symbols:
+            record = records.get(period.security_id)
+            if record is None:
+                raise ValueError(f"symbol period references unknown security {period.security_id}")
+            if period.start_date < record.listing_date:
+                raise ValueError("symbol period cannot start before listing_date")
+            if record.delisting_date is not None:
+                period_end = period.end_date or record.delisting_date
+                if period_end > record.delisting_date:
+                    raise ValueError("symbol period cannot extend beyond delisting_date")
+            periods_by_security[period.security_id].append(period)
+            periods_by_symbol[period.symbol].append(period)
+
+        for periods in periods_by_security.values():
+            _assert_non_overlapping(periods, "overlapping symbol periods for one security")
+        for periods in periods_by_symbol.values():
+            _assert_non_overlapping(periods, "same symbol overlaps across securities")
+
+        for action in self.corporate_actions:
+            record = records.get(action.security_id)
+            if record is None:
+                message = f"corporate action references unknown security {action.security_id}"
+                raise ValueError(message)
+            if not record.is_listed_on(action.effective_date):
+                raise ValueError("corporate action must fall within listing/delisting dates")
+        return self
+
+    def get_security(self, security_id: str) -> SecurityRecord:
+        for record in self.securities:
+            if record.security_id == security_id:
+                return record
+        raise KeyError(security_id)
+
+    def symbol_for(self, security_id: str, as_of: date) -> str:
+        self.get_security(security_id)
+        matches = [
+            period.symbol
+            for period in self.symbols
+            if period.security_id == security_id and period.contains(as_of)
+        ]
+        if len(matches) != 1:
+            raise KeyError(f"no unique symbol for {security_id} on {as_of}")
+        return matches[0]
+
+    def security_for_symbol(self, symbol: str, as_of: date) -> SecurityRecord:
+        matches = [
+            period.security_id
+            for period in self.symbols
+            if period.symbol == symbol and period.contains(as_of)
+        ]
+        if len(matches) != 1:
+            raise KeyError(f"no unique security for {symbol} on {as_of}")
+        record = self.get_security(matches[0])
+        if not record.is_listed_on(as_of):
+            raise KeyError(f"security {record.security_id} is not listed on {as_of}")
+        return record
+
+    def active_common_equities(self, as_of: date) -> tuple[SecurityRecord, ...]:
+        return tuple(
+            record
+            for record in self.securities
+            if record.security_type == SecurityType.COMMON_STOCK and record.is_listed_on(as_of)
+        )
+
+    def actions_for(
+        self,
+        security_id: str,
+        *,
+        through: date | None = None,
+    ) -> tuple[CorporateAction, ...]:
+        self.get_security(security_id)
+        actions = [
+            action
+            for action in self.corporate_actions
+            if action.security_id == security_id
+            and (through is None or action.effective_date <= through)
+        ]
+        return tuple(sorted(actions, key=lambda action: action.effective_date))
+
+
+def _assert_non_overlapping(periods: list[SymbolPeriod], message: str) -> None:
+    ordered = sorted(periods, key=lambda period: period.start_date)
+    for previous, current in zip(ordered, ordered[1:], strict=False):
+        if previous.end_date is None or current.start_date <= previous.end_date:
+            raise ValueError(message)
