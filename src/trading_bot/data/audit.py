@@ -267,7 +267,10 @@ def _validate_universe_snapshots(
     return ordered
 
 
-def _universe_turnover(previous: UniverseSnapshot, current: UniverseSnapshot) -> UniverseTurnover:
+def _universe_turnover(
+    previous: UniverseSnapshot,
+    current: UniverseSnapshot,
+) -> UniverseTurnover:
     before = set(previous.security_ids)
     after = set(current.security_ids)
     entered = tuple(sorted(after - before))
