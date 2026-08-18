@@ -40,15 +40,17 @@ _REQUEST_SECRET_KEYS = frozenset(
         "password",
         "private_key",
         "secret",
-        "token",
         "x_api_key",
     }
 )
-_RESPONSE_SECRET_KEYS = _REQUEST_SECRET_KEYS - {"token"}
+_RESPONSE_SECRET_KEYS = _REQUEST_SECRET_KEYS
 
 
 class VendorRequest(BaseModel):
-    """Canonical provider request whose exact non-secret semantics are persisted for auditability."""
+    """Canonical provider request.
+
+    Exact non-secret semantics are persisted for auditability.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
