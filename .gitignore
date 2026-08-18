@@ -1,0 +1,60 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local data and licensed datasets
+data/
+datasets/
+raw_data/
+processed_data/
+
+# Training / campaign artifacts
+artifacts/
+checkpoints/
+runs/
+outputs/
+wandb/
+mlruns/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Local campaign state / logs
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.log
+logs/
+status/
+
+# Compiled/native caches
+build/
+dist/
+*.so
+*.o
+.triton/
+
+# Local scratch
+scratch/
+tmp/
+.cache/
