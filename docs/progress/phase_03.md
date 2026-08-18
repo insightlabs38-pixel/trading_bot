@@ -91,8 +91,7 @@ explicit and is fully testable on synthetic regular-session fixtures.
 
 - [x] Explicit versioned policy controls target size, trailing observations, minimum history,
   minimum price, and minimum average dollar volume without hidden production thresholds.
-- [x] Eligibility uses the point-in-time security master and only active U.S.-equity/common-stock
-  records represented by the frozen security-type contract.
+- [x] Eligibility uses the point-in-time security master and only active common-stock records.
 - [x] Trailing liquidity uses observations strictly before the rebalance date.
 - [x] Historical delisted securities remain eligible while they were listed.
 - [x] Future listings, ETFs/non-common securities, insufficient history, low price, and low liquidity
@@ -106,17 +105,43 @@ weekly-vs-monthly cadence and final numeric thresholds unfrozen. The implementat
 versioned inputs; production snapshots cannot be declared frozen until those research decisions and
 real vendor history are available.
 
+## Feature pipeline
+
+A pure-Python reference path is implemented first so causal correctness is testable independently of
+columnar-engine availability. The same transformations can later be optimized without changing the
+feature contract.
+
+- [x] Raw/normalized OHLC/VWAP features.
+- [x] Multi-horizon trailing returns.
+- [x] Volume, dollar-volume, log-dollar-volume, and relative-volume features.
+- [x] Realized-volatility features.
+- [x] Range, true-range, and ATR-like features.
+- [x] Momentum and normalized trend-slope features.
+- [x] Market-relative features using the same-timestamp panel only.
+- [x] Sector-relative features using point-in-time sector metadata supplied with each observation.
+- [x] Cross-sectional return ranks.
+- [x] Minute-of-day and day-of-week cyclic/session features.
+- [x] Liquidity features.
+- [x] Market breadth, dispersion, and cross-sectional-volatility regime inputs.
+- [x] Security ID, symbol, and sector identity metadata are preserved alongside features.
+- [x] Prefix-invariance tests prove future observations cannot alter earlier feature rows.
+
+**BLOCKED — production columnar/performance validation:** Polars, PyArrow, DuckDB, and the pinned
+Python 3.12 CPU environment cannot be installed in this sandbox because outbound package access is
+blocked. The reference feature contract is validated; production-scale columnar throughput must be
+validated externally after the intended CPU dependencies are available.
+
 ## Validation performed
 
 All implemented Phase 3 data-contract tests plus the complete Phase 2 storage suite pass in the
 dedicated sandbox venv:
 
 ```text
-87 passed
+94 passed
 ```
 
 `compileall` passes and all new files satisfy the repository's 100-character line-length policy.
 Git blob hashes are checked against the exact sandbox-tested files before section merge.
 
-The production-universe policy blocker does not prevent the next section, **Feature pipeline**, from
-being implemented as a causal reference pipeline over synthetic point-in-time panel fixtures.
+The columnar-performance blocker does not prevent the next section, **Labels**, from being
+implemented and tested against synthetic panel fixtures.
