@@ -41,3 +41,21 @@ __all__ += [
     "RawValidationReport",
     "validate_raw_bars",
 ]
+
+from trading_bot.data.security_master import (
+    CorporateAction,
+    CorporateActionType,
+    SecurityMaster,
+    SecurityRecord,
+    SecurityType,
+    SymbolPeriod,
+)
+
+__all__ += [
+    "CorporateAction",
+    "CorporateActionType",
+    "SecurityMaster",
+    "SecurityRecord",
+    "SecurityType",
+    "SymbolPeriod",
+]
