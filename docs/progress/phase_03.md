@@ -18,10 +18,24 @@ This file records validation detail for Phase 3. The authoritative task list rem
   and checksum are persisted for every successful acquisition.
 - [x] Repeated identical payloads reuse the immutable raw object while retaining distinct download
   audit records.
-- [ ] **BLOCKED — broad-equities provider adapter:** final vendor subscription/API contract is not
-  available in the sandbox, so the planned provider adapter cannot be integration-tested yet.
-- [ ] **BLOCKED — execution-data provider adapter:** a Databento/equivalent selection and credentials
-  are not available, so that provider-specific adapter remains deferred.
+- [x] Provider-neutral HTTPS GET transport with injectable vendor URL construction.
+- [x] API keys can be injected only at runtime through a configured header or query parameter;
+  credential-like public URLs and sensitive committed headers are rejected.
+- [x] HTTP 408/425/429/5xx responses and transport failures map to bounded-retry acquisition errors;
+  ordinary 4xx responses map to permanent request failures.
+- [x] Only a whitelisted response-metadata subset is retained, so authentication headers and final
+  secret-bearing request URLs are not persisted in acquisition records.
+- [ ] **BLOCKED — broad-equities provider adapter:** the data contract still describes the vendor as
+  Massive/Polygon-style and explicitly makes the final subscription/API tier provisional until
+  purchase/price verification. Do not freeze an endpoint/request shape before that selection.
+- [ ] **BLOCKED — execution-data provider adapter:** the contract still describes Databento-style
+  execution data as the preferred direction rather than a final selection; no subscription/API
+  credentials are available for integration validation.
+
+The new HTTP transport intentionally stops below provider-specific semantics. Once a vendor/tier is
+selected, its adapter only needs to translate the canonical `VendorRequest` into the vendor's public
+HTTPS request shape and supply runtime authentication; immutable preservation, retry/rate limiting,
+and audit recording remain shared infrastructure.
 
 ## Raw validation
 
@@ -106,19 +120,32 @@ reference, not a claim that it is the final H200 loader representation.
 
 ## Validation performed
 
-All implemented Phase 3 data-contract tests plus the complete Phase 2 storage suite pass in the
-dedicated sandbox venv:
+The previously implemented Phase 3 data-contract tests plus the complete Phase 2 storage suite were
+validated in the earlier dedicated sandbox run:
 
 ```text
 114 passed
 ```
 
-`compileall` passes and all new Python files satisfy the repository's 100-character line policy.
+For the new provider-neutral HTTP transport, a focused sandbox mirror of the existing acquisition
+and local-storage contracts runs the repository test file successfully:
+
+```text
+17 passed
+```
+
+The focused cases cover header/query runtime authentication, secret non-persistence, sanitized
+metadata, HTTPS/userinfo/credential-query rejection, transient/permanent HTTP classification,
+transport errors, exact-byte preservation, and acquisition-runner integration. Both the new source
+and tests compile successfully and satisfy the repository's 100-character line policy.
+
+A real broad-equities or execution-provider request is intentionally not claimed as validated: this
+sandbox has no selected subscription contract, credentials, or reachable provider endpoint.
 
 ## Phase 3 gate
 
 The dependency-light pipeline contracts are implemented and individually validated, but the full
 production raw → packed gate is **BLOCKED** by provider-specific acquisition, production universe/
 split decisions, Parquet/columnar dependencies, real exchange-calendar validation, and target-
-hardware loader benchmarking. These blockers do not prevent Phase 4 leakage protections from being
-implemented against the validated synthetic/reference pipeline.
+hardware loader benchmarking. These blockers do not prevent later implementation work against the
+validated synthetic/reference pipeline.
