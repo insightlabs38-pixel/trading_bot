@@ -73,3 +73,17 @@ __all__ += [
     "canonicalize_bars",
     "total_return_between",
 ]
+
+from trading_bot.data.resampling import (
+    ResampledBar,
+    ResamplingError,
+    SessionSpec,
+    resample_canonical_bars,
+)
+
+__all__ += [
+    "ResampledBar",
+    "ResamplingError",
+    "SessionSpec",
+    "resample_canonical_bars",
+]
