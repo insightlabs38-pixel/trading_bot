@@ -297,7 +297,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_argument_parser().parse_args(arv)
+    args = build_argument_parser().parse_args(argv)
     return int(args.handler(args))
 
 
