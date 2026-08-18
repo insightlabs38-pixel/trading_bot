@@ -87,17 +87,36 @@ The reference resampler does not yet encode exchange holidays/early closes. Thos
 explicit trading-calendar source/configuration; the current contract makes session boundaries
 explicit and is fully testable on synthetic regular-session fixtures.
 
+## Point-in-time universe
+
+- [x] Explicit versioned policy controls target size, trailing observations, minimum history,
+  minimum price, and minimum average dollar volume without hidden production thresholds.
+- [x] Eligibility uses the point-in-time security master and only active U.S.-equity/common-stock
+  records represented by the frozen security-type contract.
+- [x] Trailing liquidity uses observations strictly before the rebalance date.
+- [x] Historical delisted securities remain eligible while they were listed.
+- [x] Future listings, ETFs/non-common securities, insufficient history, low price, and low liquidity
+  are excluded causally.
+- [x] Deterministic average-dollar-volume ranking and target-size selection.
+- [x] Membership snapshots persist security-master/policy versions and a stable policy SHA-256.
+- [x] Multiple snapshots can be frozen on explicit version-controlled rebalance dates.
+
+**BLOCKED — production universe methodology finalization:** the design intentionally leaves exact
+weekly-vs-monthly cadence and final numeric thresholds unfrozen. The implementation accepts them as
+versioned inputs; production snapshots cannot be declared frozen until those research decisions and
+real vendor history are available.
+
 ## Validation performed
 
-Vendor Acquisition + Raw Validation + Security Master + Canonicalization + Resampling tests plus the
-complete Phase 2 storage suite pass in the dedicated sandbox venv:
+All implemented Phase 3 data-contract tests plus the complete Phase 2 storage suite pass in the
+dedicated sandbox venv:
 
 ```text
-78 passed
+87 passed
 ```
 
 `compileall` passes and all new files satisfy the repository's 100-character line-length policy.
 Git blob hashes are checked against the exact sandbox-tested files before section merge.
 
-The provider/calendar limitations do not prevent the next section, **Point-in-time universe**, from
-being implemented and tested against synthetic daily liquidity/history fixtures.
+The production-universe policy blocker does not prevent the next section, **Feature pipeline**, from
+being implemented as a causal reference pipeline over synthetic point-in-time panel fixtures.
