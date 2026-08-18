@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from datetime import date
 from enum import StrEnum
@@ -81,6 +82,10 @@ class CorporateAction(BaseModel):
 
     @model_validator(mode="after")
     def validate_action_fields(self) -> CorporateAction:
+        if self.split_ratio is not None and not math.isfinite(self.split_ratio):
+            raise ValueError("split_ratio must be finite")
+        if self.cash_amount is not None and not math.isfinite(self.cash_amount):
+            raise ValueError("cash_amount must be finite")
         if self.action_type == CorporateActionType.SPLIT and self.split_ratio is None:
             raise ValueError("split action requires split_ratio")
         if self.action_type == CorporateActionType.CASH_DIVIDEND and self.cash_amount is None:
@@ -124,14 +129,18 @@ class SecurityMaster(BaseModel):
             periods_by_security[period.security_id].append(period)
             periods_by_symbol[period.symbol].append(period)
 
-        for security_id in records:
-            if not periods_by_security.get(security_id):
+        for security_id, record in records.items():
+            periods = periods_by_security.get(security_id)
+            if not periods:
                 raise ValueError(f"security {security_id} must have at least one symbol period")
+            _validate_symbol_lifetime(record, periods)
         for periods in periods_by_security.values():
             _assert_non_overlapping(periods, "overlapping symbol periods for one security")
         for periods in periods_by_symbol.values():
             _assert_non_overlapping(periods, "same symbol overlaps across securities")
 
+        action_documents: set[str] = set()
+        source_ids: set[tuple[str, str]] = set()
         for action in self.corporate_actions:
             record = records.get(action.security_id)
             if record is None:
@@ -139,6 +148,15 @@ class SecurityMaster(BaseModel):
                 raise ValueError(message)
             if not record.is_listed_on(action.effective_date):
                 raise ValueError("corporate action must fall within listing/delisting dates")
+            document = action.model_dump_json()
+            if document in action_documents:
+                raise ValueError("duplicate corporate actions are not allowed")
+            action_documents.add(document)
+            if action.source_id is not None:
+                source_identity = (action.security_id, action.source_id)
+                if source_identity in source_ids:
+                    raise ValueError("corporate-action source IDs must be unique per security")
+                source_ids.add(source_identity)
             if action.action_type == CorporateActionType.SYMBOL_CHANGE:
                 _validate_symbol_change_action(action, periods_by_security[action.security_id])
         return self
@@ -150,7 +168,9 @@ class SecurityMaster(BaseModel):
         raise KeyError(security_id)
 
     def symbol_for(self, security_id: str, as_of: date) -> str:
-        self.get_security(security_id)
+        record = self.get_security(security_id)
+        if not record.is_listed_on(as_of):
+            raise KeyError(f"security {security_id} is not listed on {as_of}")
         matches = [
             period.symbol
             for period in self.symbols
@@ -199,6 +219,18 @@ class SecurityMaster(BaseModel):
             and (through is None or action.effective_date <= through)
         ]
         return tuple(sorted(actions, key=lambda action: action.effective_date))
+
+
+def _validate_symbol_lifetime(record: SecurityRecord, periods: list[SymbolPeriod]) -> None:
+    ordered = sorted(periods, key=lambda period: period.start_date)
+    if ordered[0].start_date != record.listing_date:
+        raise ValueError("symbol history must begin on the security listing_date")
+    last = ordered[-1]
+    if record.delisting_date is None:
+        if last.end_date is not None:
+            raise ValueError("active security symbol history must remain open-ended")
+    elif last.end_date != record.delisting_date:
+        raise ValueError("delisted security symbol history must end on delisting_date")
 
 
 def _validate_symbol_change_action(

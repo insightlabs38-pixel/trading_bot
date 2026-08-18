@@ -65,13 +65,15 @@ def validate_raw_bars(
     expected_interval: timedelta = timedelta(minutes=1),
     detect_missing_intervals: bool = True,
     expected_sessions: Iterable[date] | None = None,
+    expected_assets: Iterable[str] | None = None,
 ) -> RawValidationReport:
     """Inspect raw bars and report anomalies without mutating or repairing input rows.
 
     ``expected_sessions`` is intentionally supplied by the caller instead of embedding an exchange
     calendar here. This keeps raw validation provider/calendar independent while still allowing an
-    acquisition run to prove that an expected trading session is wholly absent for an observed
-    asset. Session dates are interpreted at the existing UTC validation boundary.
+    acquisition run to prove that an expected trading session is wholly absent. If
+    ``expected_assets`` is also supplied, assets with no raw rows at all can be identified instead
+    of disappearing from completeness checks. Session dates are interpreted at the UTC boundary.
     """
     if expected_interval <= timedelta(0):
         raise ValueError("expected_interval must be positive")
@@ -79,6 +81,15 @@ def validate_raw_bars(
     session_dates = None if expected_sessions is None else tuple(expected_sessions)
     if session_dates is not None and len(set(session_dates)) != len(session_dates):
         raise ValueError("expected_sessions must not contain duplicate dates")
+
+    asset_ids = None if expected_assets is None else tuple(item.strip() for item in expected_assets)
+    if asset_ids is not None:
+        if session_dates is None:
+            raise ValueError("expected_assets requires expected_sessions")
+        if any(not item for item in asset_ids):
+            raise ValueError("expected_assets must not contain blank identifiers")
+        if len(set(asset_ids)) != len(asset_ids):
+            raise ValueError("expected_assets must not contain duplicate identifiers")
 
     rows = tuple(bars)
     anomalies: list[RawDataAnomaly] = []
@@ -183,8 +194,9 @@ def validate_raw_bars(
             )
 
     if session_dates is not None:
+        completeness_assets = observed_assets if asset_ids is None else set(asset_ids)
         _append_missing_session_anomalies(
-            observed_assets,
+            completeness_assets,
             set(session_dates),
             by_asset_session,
             anomalies,

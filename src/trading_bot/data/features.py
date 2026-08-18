@@ -33,14 +33,15 @@ class FeatureObservation:
             raise ValueError("timestamp must be timezone-aware")
         if not self.security_id or not self.symbol:
             raise ValueError("security_id and symbol must not be blank")
-        if min(self.open, self.high, self.low, self.close) <= 0:
-            raise ValueError("OHLC values must be positive")
+        prices = (self.open, self.high, self.low, self.close)
+        if any(not math.isfinite(value) or value <= 0 for value in prices):
+            raise ValueError("OHLC values must be finite and positive")
         if self.high < max(self.open, self.close) or self.low > min(self.open, self.close):
             raise ValueError("high/low must contain open and close")
-        if self.volume < 0:
-            raise ValueError("volume must be non-negative")
-        if self.vwap is not None and self.vwap <= 0:
-            raise ValueError("vwap must be positive when present")
+        if not math.isfinite(self.volume) or self.volume < 0:
+            raise ValueError("volume must be finite and non-negative")
+        if self.vwap is not None and (not math.isfinite(self.vwap) or self.vwap <= 0):
+            raise ValueError("vwap must be finite and positive when present")
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,9 +105,11 @@ def compute_features(
         prelim: list[tuple[FeatureObservation, dict[str, float]]] = []
         for row in panel:
             values = _security_features(row, histories[row.security_id], policy)
+            _ensure_finite_values(row, values)
             prelim.append((row, values))
         _append_cross_sectional_features(prelim)
         for row, values in prelim:
+            _ensure_finite_values(row, values)
             output.append(FeatureRow(row.security_id, row.symbol, row.sector, timestamp, values))
         for row, values in prelim:
             _advance_history(row, values, histories[row.security_id])
@@ -197,6 +200,15 @@ def _append_cross_sectional_features(
         values["market_breadth"] = breadth
         values["market_dispersion"] = dispersion
         values["market_cross_sectional_volatility"] = dispersion
+
+
+def _ensure_finite_values(row: FeatureObservation, values: dict[str, float]) -> None:
+    invalid = sorted(name for name, value in values.items() if not math.isfinite(value))
+    if invalid:
+        names = ", ".join(invalid)
+        raise FeaturePipelineError(
+            f"non-finite feature(s) for {row.security_id}@{row.timestamp.isoformat()}: {names}"
+        )
 
 
 def _advance_history(row: FeatureObservation, values: dict[str, float], history: _History) -> None:
