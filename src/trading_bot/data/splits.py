@@ -6,8 +6,9 @@ import hashlib
 import json
 from datetime import date
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class SplitManifestError(ValueError):
@@ -46,6 +47,14 @@ class WalkForwardFold(BaseModel):
     train: DateRange
     validation: DateRange
 
+    @field_validator("fold_id")
+    @classmethod
+    def normalize_fold_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("fold_id must not be blank")
+        return normalized
+
     @model_validator(mode="after")
     def validate_chronology(self) -> WalkForwardFold:
         if self.train.end >= self.validation.start:
@@ -58,12 +67,20 @@ class SplitManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: int = 1
+    schema_version: Literal[1] = 1
     split_version: str = Field(min_length=1)
     dataset_version: str = Field(min_length=1)
     folds: tuple[WalkForwardFold, ...]
     final_holdout_id: str = Field(min_length=1)
     final_holdout: DateRange
+
+    @field_validator("split_version", "dataset_version", "final_holdout_id")
+    @classmethod
+    def normalize_identifier(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("split manifest identifiers must not be blank")
+        return normalized
 
     @model_validator(mode="after")
     def validate_manifest(self) -> SplitManifest:
@@ -72,6 +89,8 @@ class SplitManifest(BaseModel):
         fold_ids = [fold.fold_id for fold in self.folds]
         if len(set(fold_ids)) != len(fold_ids):
             raise ValueError("fold IDs must be unique")
+        if self.final_holdout_id in set(fold_ids):
+            raise ValueError("final_holdout_id must be distinct from routine fold IDs")
         ordered = sorted(self.folds, key=lambda fold: fold.validation.start)
         if tuple(ordered) != self.folds:
             raise ValueError("folds must be stored in chronological validation order")
