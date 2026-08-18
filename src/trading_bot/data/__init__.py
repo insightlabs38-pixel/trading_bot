@@ -180,6 +180,28 @@ __all__ += [
     "pack_training_data",
 ]
 
+from trading_bot.data.pipeline import (
+    DataStage,
+    StageArtifactDraft,
+    StageArtifactRef,
+    StagePublicationError,
+    StageRunner,
+    StageRunResult,
+    StageRunSpec,
+    StageSuccessMarker,
+)
+
+__all__ += [
+    "DataStage",
+    "StageArtifactDraft",
+    "StageArtifactRef",
+    "StagePublicationError",
+    "StageRunner",
+    "StageRunResult",
+    "StageRunSpec",
+    "StageSuccessMarker",
+]
+
 from trading_bot.data.audit import (
     AuditObservation,
     DatasetAuditReport,
