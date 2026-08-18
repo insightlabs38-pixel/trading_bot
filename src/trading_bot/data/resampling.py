@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
@@ -16,6 +17,7 @@ class ResamplingError(RuntimeError):
 
 
 Frequency = Literal[5, 15, 30, 60, "1d"]
+_SUPPORTED_FREQUENCIES: tuple[Frequency, ...] = (5, 15, 30, 60, "1d")
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +69,8 @@ def resample_canonical_bars(
     require_complete: bool = True,
 ) -> tuple[ResampledBar, ...]:
     """Aggregate canonical bars without crossing assets, sessions, or future bucket boundaries."""
+    if frequency not in _SUPPORTED_FREQUENCIES:
+        raise ValueError(f"unsupported resampling frequency: {frequency!r}")
     session = session or SessionSpec()
     timezone = ZoneInfo(session.timezone)
     rows = tuple(bars)
@@ -74,8 +78,7 @@ def resample_canonical_bars(
     grouped: dict[tuple[str, object, int], list[CanonicalBar]] = defaultdict(list)
 
     for bar in rows:
-        if bar.timestamp.tzinfo is None or bar.timestamp.utcoffset() is None:
-            raise ResamplingError("canonical timestamps must be timezone-aware")
+        _validate_canonical_bar(bar)
         identity = (bar.security_id, bar.timestamp)
         if identity in seen:
             raise ResamplingError("duplicate security/timestamp cannot be resampled")
@@ -99,10 +102,15 @@ def resample_canonical_bars(
         grouped[(bar.security_id, session_date, bucket_index)].append(bar)
 
     output: list[ResampledBar] = []
-    for (_, _, _), bucket in sorted(
+    ordered_groups = sorted(
         grouped.items(),
-        key=lambda item: min(row.timestamp for row in item[1]),
-    ):
+        key=lambda item: (
+            min(row.timestamp for row in item[1]),
+            item[0][0],
+            item[0][2],
+        ),
+    )
+    for (_, _, _), bucket in ordered_groups:
         ordered = sorted(bucket, key=lambda row: row.timestamp)
         expected = (
             session.expected_session_bars
@@ -114,6 +122,31 @@ def resample_canonical_bars(
             continue
         output.append(_aggregate_bucket(ordered, frequency, complete))
     return tuple(output)
+
+
+def _validate_canonical_bar(bar: CanonicalBar) -> None:
+    if bar.timestamp.tzinfo is None or bar.timestamp.utcoffset() is None:
+        raise ResamplingError("canonical timestamps must be timezone-aware")
+    if not bar.security_id.strip() or not bar.symbol.strip():
+        raise ResamplingError("canonical security_id and symbol must not be blank")
+    prices = (
+        bar.adjusted_open,
+        bar.adjusted_high,
+        bar.adjusted_low,
+        bar.adjusted_close,
+    )
+    if any(not math.isfinite(value) or value <= 0 for value in prices):
+        raise ResamplingError("canonical adjusted OHLC values must be finite and positive")
+    if bar.adjusted_high < max(bar.adjusted_open, bar.adjusted_close):
+        raise ResamplingError("canonical adjusted high must contain open and close")
+    if bar.adjusted_low > min(bar.adjusted_open, bar.adjusted_close):
+        raise ResamplingError("canonical adjusted low must contain open and close")
+    if not math.isfinite(bar.adjusted_volume) or bar.adjusted_volume < 0:
+        raise ResamplingError("canonical adjusted volume must be finite and non-negative")
+    if bar.adjusted_vwap is not None and (
+        not math.isfinite(bar.adjusted_vwap) or bar.adjusted_vwap <= 0
+    ):
+        raise ResamplingError("canonical adjusted VWAP must be finite and positive when present")
 
 
 def _is_complete_bucket(
@@ -151,9 +184,7 @@ def _aggregate_bucket(
     vwap = None
     if weighted:
         weighted_volume = sum(weight for _, weight in weighted)
-        numerator = sum(
-            value * weight for value, weight in weighted if value is not None
-        )
+        numerator = sum(value * weight for value, weight in weighted if value is not None)
         vwap = numerator / weighted_volume
 
     return ResampledBar(
