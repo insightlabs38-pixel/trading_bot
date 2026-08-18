@@ -6,6 +6,7 @@ import hashlib
 import json
 import tempfile
 import time
+import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -29,8 +30,25 @@ class PermanentAcquisitionError(AcquisitionError):
     """Non-retryable vendor request failure."""
 
 
+_REQUEST_SECRET_KEYS = frozenset(
+    {
+        "access_token",
+        "api_key",
+        "apikey",
+        "authorization",
+        "client_secret",
+        "password",
+        "private_key",
+        "secret",
+        "token",
+        "x_api_key",
+    }
+)
+_RESPONSE_SECRET_KEYS = _REQUEST_SECRET_KEYS - {"token"}
+
+
 class VendorRequest(BaseModel):
-    """Canonical provider request whose exact semantics are persisted for auditability."""
+    """Canonical provider request whose exact non-secret semantics are persisted for auditability."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -56,6 +74,12 @@ class VendorRequest(BaseModel):
         if len(set(normalized)) != len(normalized):
             raise ValueError("symbols must be unique")
         return normalized
+
+    @field_validator("parameters")
+    @classmethod
+    def reject_secret_parameters(cls, value: dict[str, JsonValue]) -> dict[str, JsonValue]:
+        _reject_sensitive_keys(value, sensitive_keys=_REQUEST_SECRET_KEYS, context="parameters")
+        return value
 
     def canonical_json(self) -> str:
         return json.dumps(
@@ -106,7 +130,7 @@ class AcquisitionRecord(BaseModel):
     @field_validator("downloaded_at_utc")
     @classmethod
     def require_utc(cls, value: datetime) -> datetime:
-        if value.tzinfo is None:
+        if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("downloaded_at_utc must be timezone-aware")
         return value.astimezone(UTC)
 
@@ -200,6 +224,16 @@ class AcquisitionRunner:
         return self._preserve(request, payload)
 
     def _preserve(self, request: VendorRequest, payload: VendorPayload) -> AcquisitionRecord:
+        response_metadata = dict(payload.response_metadata or {})
+        try:
+            _reject_sensitive_keys(
+                response_metadata,
+                sensitive_keys=_RESPONSE_SECRET_KEYS,
+                context="response_metadata",
+            )
+        except ValueError as exc:
+            raise AcquisitionError(str(exc)) from exc
+
         payload_sha = hashlib.sha256(payload.content).hexdigest()
         request_sha = request.request_sha256()
         provider = _safe_component(request.provider)
@@ -216,7 +250,10 @@ class AcquisitionRunner:
             else:
                 self.backend.upload(raw_path, raw_key, expected_sha256=payload_sha)
 
-            downloaded_at = self.now().astimezone(UTC)
+            downloaded_at = self.now()
+            if downloaded_at.tzinfo is None or downloaded_at.utcoffset() is None:
+                raise AcquisitionError("acquisition clock must return a timezone-aware datetime")
+            downloaded_at = downloaded_at.astimezone(UTC)
             record = AcquisitionRecord(
                 request=request,
                 request_sha256=request_sha,
@@ -226,7 +263,7 @@ class AcquisitionRunner:
                 payload_sha256=payload_sha,
                 content_type=payload.content_type,
                 vendor_source_id=payload.source_id,
-                response_metadata=dict(payload.response_metadata or {}),
+                response_metadata=response_metadata,
             )
             record_payload = json.dumps(
                 record.model_dump(mode="json"),
@@ -235,7 +272,8 @@ class AcquisitionRunner:
                 ensure_ascii=False,
             ).encode("utf-8")
             stamp = downloaded_at.strftime("%Y%m%dT%H%M%S.%fZ")
-            record_name = f"{stamp}-{payload_sha[:12]}.json"
+            event_id = uuid.uuid4().hex
+            record_name = f"{stamp}-{payload_sha[:12]}-{event_id}.json"
             record_key = normalize_storage_key(
                 f"{self.raw_prefix}/{provider}/{request_sha}/acquisitions/{record_name}"
             )
@@ -244,6 +282,31 @@ class AcquisitionRunner:
             record_sha = hashlib.sha256(record_payload).hexdigest()
             self.backend.upload(record_path, record_key, expected_sha256=record_sha)
         return record
+
+
+def _reject_sensitive_keys(
+    value: object,
+    *,
+    sensitive_keys: frozenset[str],
+    context: str,
+) -> None:
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            normalized = str(key).strip().lower().replace("-", "_").replace(" ", "_")
+            if normalized in sensitive_keys:
+                raise ValueError(f"{context} must not contain runtime secret field {key!r}")
+            _reject_sensitive_keys(
+                nested,
+                sensitive_keys=sensitive_keys,
+                context=f"{context}.{key}",
+            )
+    elif isinstance(value, (list, tuple)):
+        for index, nested in enumerate(value):
+            _reject_sensitive_keys(
+                nested,
+                sensitive_keys=sensitive_keys,
+                context=f"{context}[{index}]",
+            )
 
 
 def _safe_component(value: str) -> str:
