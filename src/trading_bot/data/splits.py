@@ -62,6 +62,51 @@ class WalkForwardFold(BaseModel):
         return self
 
 
+class RoutineSplitManifest(BaseModel):
+    """Routine-search split view that deliberately omits final-holdout dates."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    split_version: str = Field(min_length=1)
+    dataset_version: str = Field(min_length=1)
+    folds: tuple[WalkForwardFold, ...]
+    final_holdout_id: str = Field(min_length=1)
+    full_split_sha256: str
+
+    @field_validator("split_version", "dataset_version", "final_holdout_id")
+    @classmethod
+    def normalize_identifier(cls, value: str) -> str:
+        return _normalize_identifier(value)
+
+    @field_validator("full_split_sha256")
+    @classmethod
+    def validate_full_split_sha256(cls, value: str) -> str:
+        normalized = value.lower()
+        if len(normalized) != 64 or any(char not in "0123456789abcdef" for char in normalized):
+            raise ValueError("full_split_sha256 must be 64 lowercase hexadecimal characters")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_routine_manifest(self) -> RoutineSplitManifest:
+        _validate_routine_folds(self.folds, self.final_holdout_id)
+        return self
+
+    def canonical_json(self) -> str:
+        return json.dumps(
+            self.model_dump(mode="json"),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+
+    def fold(self, fold_id: str) -> WalkForwardFold:
+        return _find_fold(self.folds, fold_id)
+
+    def routine_partition(self, value: date) -> tuple[str, str] | None:
+        return _routine_partition(self.folds, value)
+
+
 class SplitManifest(BaseModel):
     """Versioned split contract independent of model/training code."""
 
@@ -77,31 +122,11 @@ class SplitManifest(BaseModel):
     @field_validator("split_version", "dataset_version", "final_holdout_id")
     @classmethod
     def normalize_identifier(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("split manifest identifiers must not be blank")
-        return normalized
+        return _normalize_identifier(value)
 
     @model_validator(mode="after")
     def validate_manifest(self) -> SplitManifest:
-        if not self.folds:
-            raise ValueError("at least one walk-forward fold is required")
-        fold_ids = [fold.fold_id for fold in self.folds]
-        if len(set(fold_ids)) != len(fold_ids):
-            raise ValueError("fold IDs must be unique")
-        if self.final_holdout_id in set(fold_ids):
-            raise ValueError("final_holdout_id must be distinct from routine fold IDs")
-        ordered = sorted(self.folds, key=lambda fold: fold.validation.start)
-        if tuple(ordered) != self.folds:
-            raise ValueError("folds must be stored in chronological validation order")
-        previous_validation_end: date | None = None
-        for fold in self.folds:
-            if (
-                previous_validation_end is not None
-                and fold.validation.start <= previous_validation_end
-            ):
-                raise ValueError("validation periods must not overlap or move backward")
-            previous_validation_end = fold.validation.end
+        _validate_routine_folds(self.folds, self.final_holdout_id)
         latest_routine_date = max(
             max(fold.train.end, fold.validation.end) for fold in self.folds
         )
@@ -120,11 +145,18 @@ class SplitManifest(BaseModel):
     def split_sha256(self) -> str:
         return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
 
+    def routine_view(self) -> RoutineSplitManifest:
+        """Return the normal-search view with no final-holdout date fields."""
+        return RoutineSplitManifest(
+            split_version=self.split_version,
+            dataset_version=self.dataset_version,
+            folds=self.folds,
+            final_holdout_id=self.final_holdout_id,
+            full_split_sha256=self.split_sha256(),
+        )
+
     def fold(self, fold_id: str) -> WalkForwardFold:
-        for fold in self.folds:
-            if fold.fold_id == fold_id:
-                return fold
-        raise KeyError(fold_id)
+        return _find_fold(self.folds, fold_id)
 
     def final_holdout_range(
         self,
@@ -139,9 +171,52 @@ class SplitManifest(BaseModel):
 
     def routine_partition(self, value: date) -> tuple[str, str] | None:
         """Identify only train/validation partitions; final holdout is intentionally invisible."""
-        for fold in self.folds:
-            if fold.train.contains(value):
-                return fold.fold_id, "train"
-            if fold.validation.contains(value):
-                return fold.fold_id, "validation"
-        return None
+        return _routine_partition(self.folds, value)
+
+
+def _normalize_identifier(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("split manifest identifiers must not be blank")
+    return normalized
+
+
+def _validate_routine_folds(
+    folds: tuple[WalkForwardFold, ...],
+    final_holdout_id: str,
+) -> None:
+    if not folds:
+        raise ValueError("at least one walk-forward fold is required")
+    fold_ids = [fold.fold_id for fold in folds]
+    if len(set(fold_ids)) != len(fold_ids):
+        raise ValueError("fold IDs must be unique")
+    if final_holdout_id in set(fold_ids):
+        raise ValueError("final_holdout_id must be distinct from routine fold IDs")
+    ordered = sorted(folds, key=lambda fold: fold.validation.start)
+    if tuple(ordered) != folds:
+        raise ValueError("folds must be stored in chronological validation order")
+    previous_validation_end: date | None = None
+    for fold in folds:
+        if previous_validation_end is not None and fold.validation.start <= previous_validation_end:
+            raise ValueError("validation periods must not overlap or move backward")
+        previous_validation_end = fold.validation.end
+
+
+def _find_fold(folds: tuple[WalkForwardFold, ...], fold_id: str) -> WalkForwardFold:
+    normalized = fold_id.strip()
+    for fold in folds:
+        if fold.fold_id == normalized:
+            return fold
+    raise KeyError(fold_id)
+
+
+def _routine_partition(
+    folds: tuple[WalkForwardFold, ...],
+    value: date,
+) -> tuple[str, str] | None:
+    for fold in folds:
+        if fold.train.contains(value):
+            return fold.fold_id, "train"
+        if fold.validation.contains(value):
+            return fold.fold_id, "validation"
+    return None
