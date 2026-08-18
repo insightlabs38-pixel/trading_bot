@@ -2,7 +2,7 @@
 
 Last updated: **2026-08-18**
 
-Status: **IN PROGRESS**
+Status: **BLOCKED — target-environment confirmation**
 
 This file records validation detail for Phase 1. The authoritative task list remains
 `IMPLEMENTATION_PLAN.md`.
@@ -60,47 +60,50 @@ validation-environment limitation, not an implementation gap in the Python-proje
 - Model-specific parameter values are constrained to JSON-compatible values so manifest
   serialization cannot silently fail on arbitrary Python objects.
 
+## Common metadata
+
+- [x] Typed immutable identifiers are defined for dataset version, split version, model
+  configuration, trial, campaign, checkpoint, and prediction artifacts.
+- [x] Stable SHA-256 config hashing is implemented over canonical secret-redacted config JSON.
+- [x] Model configuration IDs are content-derived from deterministic canonical serialization.
+- [x] Git SHA/branch/dirty-state capture is implemented with explicit environment overrides for
+  packaged/containerized execution.
+- [x] Container identity capture is allowlisted and never serializes arbitrary environment data.
+- [x] Python/platform/package-version environment capture is dependency-light and does not import
+  GPU frameworks merely to inspect their installed versions.
+- [x] Immutable run-manifest generation records config identity, typed IDs, Git/container/runtime
+  provenance, seed, precision, and compile mode.
+- [x] `python -m trading_bot.metadata` provides the minimal run-manifest command required by the
+  Phase 1 gate and does not require market data or a GPU.
+
 ### Sandbox validation performed
 
-The configuration suite was executed under Python **3.13.5**, Pydantic **2.13.4**, PyYAML
-**6.0.3**, and pytest **9.0.2**.
+The combined configuration/common-metadata suite was executed under Python **3.13.5**, Pydantic
+**2.13.4**, PyYAML **6.0.3**, and pytest **9.0.2**.
 
 Result:
 
 ```text
-20 passed in 0.11s
+36 passed in 0.84s
 ```
 
-Validated behaviors include:
+Validated metadata behaviors include:
 
-- example YAML loading and configuration round-trip;
-- top-level and nested unknown-field rejection;
-- environment substitution, defaults, endpoint values, and secret values;
-- missing environment-variable failure;
-- frozen configuration objects;
-- secret redaction from manifest serialization;
-- deterministic/order-independent canonical JSON serialization;
-- JSON-compatible model-parameter enforcement;
-- objective/dataset horizon compatibility;
-- notification webhook requirements;
-- provider-neutral AI repair settings and required credentials when enabled;
-- deliberately unfrozen paper/live numeric limits and mandatory safety gates when enabled;
-- explicit spread-cost presence in evaluation configuration.
+- all seven identifier families and unsafe-ID rejection;
+- a hard-coded golden SHA-256 for the example configuration;
+- order-independent config hashing and material-change hash sensitivity;
+- stable content-derived model configuration IDs;
+- Git environment overrides and real clean/dirty Git repository capture;
+- allowlisted container metadata capture without secret/environment leakage;
+- installed/missing package-version capture without importing heavy frameworks;
+- immutable, UTC-normalized run manifests using redacted canonical config content;
+- a CLI smoke test that loads the example config and writes a manifest without market data/GPU.
 
-`python -m compileall` also passes for the configuration package and tests, and the changed Python
-files contain no lines longer than the repository's configured 100-character Ruff limit.
+`python -m compileall` also passes for the configuration and metadata packages/tests, and the
+changed Python files contain no lines longer than the repository's configured 100-character
+Ruff limit.
 
-**BLOCKED — target-environment confirmation:** Ruff and mypy are not installed in this sandbox,
-and the sandbox cannot install them because outbound package-index access is unavailable. The
-same configuration suite should be rerun under the pinned Python 3.12/uv environment before the
-Phase 1 gate is declared passed.
-
-## Common metadata
-
-- [ ] Identifiers.
-- [ ] Config hashing.
-- [ ] Git/container/environment capture.
-- [ ] Run-manifest generation.
-
-The Phase 1 gate remains **IN PROGRESS** because common metadata and the minimal run-manifest
-command are still outstanding. Stable config-hash tests remain part of that next section.
+**BLOCKED — target-environment confirmation:** the sandbox still lacks the pinned Python 3.12
+runtime, Ruff, and mypy, and cannot install them because package-index access is unavailable.
+Before the Phase 1 gate is declared passed, run the full suite plus Ruff/mypy in the supported
+Python 3.12/uv environment.
