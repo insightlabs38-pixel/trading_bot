@@ -86,7 +86,7 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | Phase | Status | Required before H200? |
 |---|---|---|
 | 0. Repository/design baseline | **COMPLETE** | Yes |
-| 1. Project/config foundations | Not started | Yes |
+| 1. Project/config foundations | **IN PROGRESS** | Yes |
 | 2. Storage + artifact primitives | Not started | Yes |
 | 3. CPU data pipeline | Not started | Yes |
 | 4. Dataset validation + leakage protection | Not started | Yes |
@@ -149,36 +149,36 @@ Create the common project infrastructure all later modules depend on.
 
 ### Python project
 
-- [ ] Create `pyproject.toml`.
-- [ ] Select and pin supported Python version(s).
-- [ ] Configure `uv` dependency groups, at minimum:
-  - [ ] core;
-  - [ ] cpu;
-  - [ ] gpu;
-  - [ ] dev/test.
-- [ ] Configure Ruff.
-- [ ] Configure pytest.
-- [ ] Add typing policy/tooling if used.
-- [ ] Add package metadata and `src/trading_bot` package initialization.
+- [x] Create `pyproject.toml`.
+- [x] Select and pin supported Python version(s).
+- [x] Configure `uv` dependency groups, at minimum:
+  - [x] core;
+  - [x] cpu;
+  - [x] gpu;
+  - [x] dev/test.
+- [x] Configure Ruff.
+- [x] Configure pytest.
+- [x] Add typing policy/tooling if used.
+- [x] Add package metadata and `src/trading_bot` package initialization.
 
 ### Configuration system
 
-- [ ] Define strongly validated config schemas for:
-  - [ ] storage;
-  - [ ] dataset;
-  - [ ] preprocessing;
-  - [ ] model;
-  - [ ] training;
-  - [ ] objective;
-  - [ ] evaluation;
-  - [ ] campaign;
-  - [ ] scheduler;
-  - [ ] notifications;
-  - [ ] AI repair;
-  - [ ] paper/live risk settings.
-- [ ] Support environment-variable interpolation for secrets/endpoints.
-- [ ] Ensure configs can be serialized into immutable run manifests.
-- [ ] Reject unknown/invalid config fields instead of silently ignoring them.
+- [x] Define strongly validated config schemas for:
+  - [x] storage;
+  - [x] dataset;
+  - [x] preprocessing;
+  - [x] model;
+  - [x] training;
+  - [x] objective;
+  - [x] evaluation;
+  - [x] campaign;
+  - [x] scheduler;
+  - [x] notifications;
+  - [x] AI repair;
+  - [x] paper/live risk settings.
+- [x] Support environment-variable interpolation for secrets/endpoints.
+- [x] Ensure configs can be serialized into immutable run manifests.
+- [x] Reject unknown/invalid config fields instead of silently ignoring them.
 
 ### Common metadata
 
@@ -195,10 +195,18 @@ Create the common project infrastructure all later modules depend on.
 
 ## Tests
 
-- [ ] Config round-trip tests.
-- [ ] Invalid config rejection tests.
-- [ ] Environment-variable substitution tests.
+- [x] Config round-trip tests.
+- [x] Invalid config rejection tests.
+- [x] Environment-variable substitution tests.
 - [ ] Stable config-hash tests.
+
+### Progress note — 2026-08-18
+
+- Completed: Python project section and Configuration system section.
+- Verified by: configuration test suite passes in the available sandbox (`20 passed` under Python 3.13.5, Pydantic 2.13.4, PyYAML 6.0.3, pytest 9.0.2); configuration package/tests also pass `compileall`.
+- Contract alignment: AI repair is provider-neutral; paper/live numeric risk limits remain deliberately unfrozen until explicitly configured; evaluation cost configuration requires fee, spread, slippage, and impact components.
+- **BLOCKED — target-environment confirmation:** the sandbox does not provide the pinned Python 3.12 runtime, Ruff, or mypy, and package-index access is unavailable. The supported Python 3.12/uv lint/type/test confirmation must therefore be run externally before the Phase 1 gate is declared passed.
+- Remaining blocker: Common metadata, stable config hashing/tests, and the minimal run-manifest command.
 
 ## Gate
 
