@@ -13,6 +13,13 @@ from trading_bot.storage.base import (
     sha256_file,
     temporary_storage_key,
 )
+from trading_bot.storage.bulk import (
+    BulkTransferError,
+    BulkTransferManager,
+    BulkTransferStats,
+    DownloadItem,
+    UploadItem,
+)
 from trading_bot.storage.factory import create_storage_backend
 from trading_bot.storage.local import LocalStorageBackend
 from trading_bot.storage.manifests import (
@@ -29,6 +36,10 @@ from trading_bot.storage.manifests import (
 from trading_bot.storage.s3 import S3StorageBackend
 
 __all__ = [
+    "BulkTransferError",
+    "BulkTransferManager",
+    "BulkTransferStats",
+    "DownloadItem",
     "ArtifactManifest",
     "ArtifactManifestError",
     "ArtifactVerificationError",
@@ -42,6 +53,7 @@ __all__ = [
     "StorageObjectMetadata",
     "TransferTimeoutPolicy",
     "UnsafeStorageKeyError",
+    "UploadItem",
     "build_artifact_manifest",
     "load_artifact_manifest",
     "manifest_key_for",
