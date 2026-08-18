@@ -64,6 +64,37 @@ and package/tool downloads are blocked. The backend-native implementation theref
 allowed "or equivalent" implementation path. Provider-scale performance remains an external
 benchmark item.
 
+## Real-provider gate harness
+
+- [x] Added `tests/integration/test_phase2_s3_provider_gate.py` as the opt-in real-provider gate.
+- [x] Uses a unique per-run provider prefix and deletes the generated remote artifact/manifest.
+- [x] Exercises artifact publication, local-source deletion, resumable restore, byte equality,
+  checksum verification, and manifest verification against the actual S3-compatible endpoint.
+- [x] Requires explicit `TRADING_BOT_S3_TEST_ENABLED=1` plus bucket and endpoint variables so the
+  integration test cannot accidentally mutate a default AWS account.
+- [x] Supports optional region, access key, secret key, session token, and test-prefix variables.
+
+Required activation variables:
+
+```text
+TRADING_BOT_S3_TEST_ENABLED=1
+TRADING_BOT_S3_TEST_BUCKET=<test bucket>
+TRADING_BOT_S3_TEST_ENDPOINT_URL=<S3-compatible endpoint>
+```
+
+Optional variables:
+
+```text
+TRADING_BOT_S3_TEST_REGION
+TRADING_BOT_S3_TEST_ACCESS_KEY
+TRADING_BOT_S3_TEST_SECRET_KEY
+TRADING_BOT_S3_TEST_SESSION_TOKEN
+TRADING_BOT_S3_TEST_PREFIX
+```
+
+The harness is implemented now; the provider-specific checkbox remains blocked until this test is
+actually run successfully against GMI Cold Storage or the selected S3-compatible test provider.
+
 ## Sandbox test environment
 
 A dedicated test virtual environment exists at `/mnt/data/trading_bot_test_venv`.
@@ -97,6 +128,14 @@ Also passed:
 - repository 100-character line-length check for all new Python files;
 - Git blob-hash comparisons confirming feature-branch source matches the exact venv-tested files.
 
+For the new real-provider gate harness in the current sandbox:
+
+- `python -m py_compile tests/integration/test_phase2_s3_provider_gate.py` passes;
+- the 100-character line-length check passes;
+- with no provider opt-in variables configured, pytest safely reports the module as skipped;
+- live provider execution is intentionally **BLOCKED** because this sandbox has no GMI/S3 endpoint
+  credentials or reachable provider endpoint.
+
 Validated failure/recovery behavior includes checksum mismatch without publication, atomic local
 replacement, bounded transient S3 retry, retry after partial upload-stream consumption, temporary
 S3-key cleanup, multipart cleanup/fallback, artifact tamper and size-mismatch detection, invalid
@@ -106,7 +145,8 @@ without retransferring the already verified object.
 ## Phase 2 test checklist status
 
 - [x] Local backend unit tests.
-- [ ] **BLOCKED** — S3 integration tests against a real test bucket or S3-compatible emulator.
+- [ ] **BLOCKED** — real S3 integration test harness is implemented, but successful execution
+  still requires a GMI/test S3 endpoint and credentials.
 - [x] Interrupted upload recovery/resume test at the bulk-transfer level.
 - [x] Checksum mismatch detection test.
 - [x] Manifest verification test.
@@ -118,5 +158,7 @@ storage with a manifest, the source can be deleted, the bytes can be restored th
 bulk-transfer path, and the restored/stored artifact can be checksum/manifest verified without
 manual steps.
 
-**BLOCKED — provider integration only:** repeat the same round-trip against GMI Cold Storage and,
-if used, an external S3-compatible staging provider before Phase 2 is declared fully complete.
+**BLOCKED — provider integration only:** run
+`tests/integration/test_phase2_s3_provider_gate.py` successfully against GMI Cold Storage and, if
+used, the selected external S3-compatible staging provider before Phase 2 is declared fully
+complete.
