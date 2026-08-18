@@ -45,6 +45,7 @@ objective:
 evaluation:
   annualization_days: 252
   fee_bps: 0.2
+  spread_bps: 1.0
   slippage_bps: 1.0
   impact_bps: 0.5
 
@@ -65,7 +66,7 @@ notifications:
 ai_repair:
   enabled: false
 
+# Numeric paper/live risk limits are intentionally omitted until they are
+# explicitly frozen after broker/account/paper validation decisions.
 paper_live_risk:
-  max_position_weight: 0.02
-  max_gross_exposure: 1.0
-  max_abs_net_exposure: 0.20
+  enabled: false
