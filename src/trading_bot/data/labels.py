@@ -90,20 +90,31 @@ def generate_labels(
             if endpoint is None:
                 continue
             future_return = endpoint.close / row.close - 1.0
+            _require_finite_target(future_return, row, horizon, "future_return")
             future_returns[horizon] = future_return
             directions[horizon] = int(future_return > 0)
-            future_volatility[horizon] = _future_realized_volatility(
+            volatility = _future_realized_volatility(
                 row,
                 endpoint_time,
                 lookup,
                 times_by_security[row.security_id],
             )
+            _require_finite_target(volatility, row, horizon, "future_volatility")
+            future_volatility[horizon] = volatility
             if reference_id is not None:
                 reference_now = lookup.get((reference_id, row.timestamp))
                 reference_future = lookup.get((reference_id, endpoint_time))
                 if reference_now is not None and reference_future is not None:
                     reference_return = reference_future.close / reference_now.close - 1.0
-                    excess_returns[horizon] = future_return - reference_return
+                    _require_finite_target(
+                        reference_return,
+                        row,
+                        horizon,
+                        "reference_return",
+                    )
+                    excess = future_return - reference_return
+                    _require_finite_target(excess, row, horizon, "future_excess_return")
+                    excess_returns[horizon] = excess
         prelim[(row.security_id, row.timestamp)] = {
             "future_returns": future_returns,
             "future_excess_returns": excess_returns,
@@ -150,6 +161,19 @@ def generate_labels(
     return tuple(output)
 
 
+def _require_finite_target(
+    value: float,
+    row: LabelObservation,
+    horizon: int,
+    name: str,
+) -> None:
+    if not math.isfinite(value):
+        raise LabelGenerationError(
+            f"non-finite {name} for {row.security_id}@{row.timestamp.isoformat()} "
+            f"at horizon {horizon}"
+        )
+
+
 def _future_realized_volatility(
     start: LabelObservation,
     endpoint_time: datetime,
@@ -167,7 +191,10 @@ def _future_realized_volatility(
     for previous_time, current_time in zip(selected, selected[1:], strict=False):
         previous = lookup[(start.security_id, previous_time)]
         current = lookup[(start.security_id, current_time)]
-        returns.append(current.close / previous.close - 1.0)
+        value = current.close / previous.close - 1.0
+        if not math.isfinite(value):
+            raise LabelGenerationError("future volatility path produced a non-finite return")
+        returns.append(value)
     return statistics.pstdev(returns) if len(returns) > 1 else 0.0
 
 
