@@ -41,17 +41,30 @@ The missing-interval primitive intentionally does not embed a U.S. exchange cale
 identifies gaps within an observed asset/date sequence and avoids treating cross-date boundaries as
 missing intraday bars. Calendar/session semantics are handled in the later resampling/session layer.
 
+## Security master
+
+- [x] Permanent security-ID keyed records.
+- [x] Point-in-time ticker/symbol history.
+- [x] Listing and delisting dates.
+- [x] Security-type classification.
+- [x] Exchange metadata.
+- [x] Sector/issuer reference metadata hooks.
+- [x] Corporate-action records for splits, cash dividends, symbol changes, mergers/spinoffs/other.
+- [x] Historical lookup retains delisted securities instead of filtering to current survivors.
+- [x] Overlap guards prevent ticker reuse from splicing unrelated securities together.
+- [x] Corporate actions must reference a known security and occur during its listed lifetime.
+
 ## Validation performed
 
-The Vendor Acquisition + Raw Validation tests plus the complete Phase 2 storage suite pass in the
-dedicated sandbox venv:
+Vendor Acquisition + Raw Validation + Security Master tests plus the complete Phase 2 storage suite
+pass in the dedicated sandbox venv:
 
 ```text
-51 passed
+60 passed
 ```
 
 `compileall` passes and the new files satisfy the repository's 100-character line-length policy.
-Git blob hashes were checked against the exact sandbox-tested files before merge.
+Git blob hashes are checked against the exact sandbox-tested files before section merge.
 
-The external-provider blockers do not prevent the next section, **Security master**, from being
-implemented and tested against synthetic fixtures.
+The provider blockers do not prevent the next section, **Adjustment/canonicalization**, from being
+implemented and tested against synthetic security-master/corporate-action fixtures.
