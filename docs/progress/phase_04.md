@@ -2,7 +2,7 @@
 
 Last updated: **2026-08-18**
 
-Status: **IN PROGRESS**
+Status: **BLOCKED**
 
 This file records Phase 4 validation detail. The authoritative task list remains
 `IMPLEMENTATION_PLAN.md`.
@@ -21,29 +21,38 @@ This file records Phase 4 validation detail. The authoritative task list remains
 - [x] Final holdout is invisible to routine partition lookup and denied by default.
 - [x] Overlapping ticker reuse across unrelated security IDs is rejected.
 
-These tests consolidate causal guarantees that were already individually validated during Phase 3.
-They form a regression gate for future columnar/GPU optimizations: optimized implementations must
-preserve the same prefix-invariance and point-in-time behavior.
+These tests consolidate causal guarantees already individually validated during Phase 3 and form a
+regression gate for later columnar/GPU optimizations.
+
+## Dataset audits
+
+- [x] Dataset summary report with row count, asset count, and observed timestamp range.
+- [x] Missing close/volume counts plus non-finite and negative-volume diagnostics.
+- [x] Unique asset counts through time.
+- [x] Per-asset chronological return sanity distribution.
+- [x] Volume sanity distribution.
+- [x] Consecutive point-in-time universe entry/exit and one-way turnover statistics.
+- [x] Routine train/validation split timeline report.
+- [x] Protected final-holdout ID is reported without exposing protected holdout dates through the
+  routine audit path.
+- [x] Deterministic canonical JSON and human-readable Markdown report output.
 
 ## Validation performed
 
-The complete Phase 2 storage suite, all implemented Phase 3 data-contract tests, and the consolidated
-Phase 4 leakage suite pass in the dedicated sandbox venv:
+The complete Phase 2 storage suite, all implemented Phase 3 data-contract tests, the Phase 4 leakage
+suite, and dataset-audit tests pass in the dedicated sandbox venv:
 
 ```text
-123 passed
+129 passed
 ```
 
 `compileall` passes and all Python files satisfy the repository's 100-character line policy.
 
-## Remaining Phase 4 work
+## Gate
 
-- Dataset summary/audit report.
-- Missingness statistics.
-- Asset counts through time.
-- Universe turnover statistics.
-- Return/volume sanity distributions.
-- Split-date report/visualization.
-
-The full production-data leakage gate remains externally dependent on the Phase 3 production-data
-blockers, but the invariant suite itself is complete and locally validated.
+All implementable Phase 4 invariants and audit/reporting primitives pass against synthetic/reference
+data. The **production-data gate remains BLOCKED** until the Phase 3 external blockers are resolved:
+real provider data, finalized universe/split definitions, production columnar representation,
+exchange-calendar validation, and target-hardware loader benchmarks. No architecture result should
+be treated as full-production trustworthy until the same invariant/audit suite passes that finalized
+dataset.
