@@ -2,7 +2,7 @@
 
 Last updated: **2026-08-18**
 
-Status: **IN PROGRESS**
+Status: **BLOCKED**
 
 This file records validation detail for Phase 2. The authoritative task list remains
 `IMPLEMENTATION_PLAN.md`.
@@ -36,47 +36,87 @@ against an in-memory client, and boto3 client timeout construction is tested wit
 but GMI/external-provider compatibility must be confirmed against a real endpoint before those
 provider-specific tracker items are checked.
 
+## Artifact manifests
+
+- [x] Immutable versioned artifact-manifest schema.
+- [x] Logical artifact path/key, byte size, SHA-256, artifact schema/version, and UTC creation time.
+- [x] Producer Git SHA and producer config SHA-256 provenance fields.
+- [x] Optional row-count, tensor-shape, generation-stage, upstream-ID, and JSON metadata lineage.
+- [x] Stable canonical JSON plus a manifest-document SHA-256.
+- [x] Backend-independent manifest build/write/load/verify helpers.
+- [x] Manifest publication occurs only after artifact checksum/size verification succeeds.
+- [x] Local verification command: `python -m trading_bot.storage.manifests verify-local ...`.
+
+## Bulk transfer
+
+- [x] Backend-native bulk-transfer implementation used as the plan's `rclone`, `s5cmd`, or
+  equivalent path when external transfer binaries are unavailable.
+- [x] Upload and download batches over the common storage protocol.
+- [x] Durable versioned JSON journal for object-level resume after interruption/restart.
+- [x] Verified existing objects/files are adopted/skipped rather than retransferred.
+- [x] Plan-hash protection prevents accidentally reusing a journal for a different transfer set.
+- [x] Automatic multipart behavior is inherited from the S3 backend for large uploads.
+- [x] Per-run JSONL throughput/counter statistics, including bytes and MiB/s.
+- [x] Journal writes are atomic and fsynced; ordinary failures record partial statistics.
+
+The sandbox does not provide `rclone` or `s5cmd`, and cannot download them because outbound DNS
+and package/tool downloads are blocked. The backend-native implementation therefore satisfies the
+allowed "or equivalent" implementation path. Provider-scale performance remains an external
+benchmark item.
+
 ## Sandbox test environment
 
-A dedicated test virtual environment was created at `/mnt/data/trading_bot_test_venv`.
+A dedicated test virtual environment exists at `/mnt/data/trading_bot_test_venv`.
 
-The sandbox is itself hosted inside a managed Python environment, so a normal `python -m venv`
-and `python -m venv --system-site-packages` do not inherit the harness's preinstalled packages.
-For sandbox-only validation, a `.pth` file in the test venv points at the harness's existing
-site-packages directory. This avoids network/package installation while still using an isolated
-venv interpreter.
+The sandbox is itself hosted inside a managed Python environment, so the isolated venv uses a
+sandbox-only `.pth` bridge to the harness's preinstalled site-packages. This permits repeatable
+pytest execution without downloading dependencies.
 
-This does **not** change the repository dependency policy and does not resolve the Phase 1
-Python 3.12 target-environment blocker; the venv still uses the sandbox's Python 3.13.5.
+Attempts to upgrade the venv were made on 2026-08-18:
+
+- Python 3.12 is not installed anywhere in the sandbox.
+- `uv python install 3.12` cannot resolve/download its Python distribution because outbound DNS
+  is blocked.
+- `pip install ruff mypy` likewise cannot reach a package index.
+- no useful cached wheels/interpreters were found for the missing tools.
+
+This does **not** change the repository dependency policy and does not resolve the Phase 1 target-
+environment blocker; the venv still uses Python 3.13.5.
 
 ## Validation performed
 
-Storage abstraction suite:
+Combined Phase 2 storage suite:
 
 ```text
-17 passed in 0.46s
+34 passed
 ```
 
 Also passed:
 
-- `python -m compileall` for the storage implementation/tests;
+- `python -m compileall` for storage implementation/tests;
 - repository 100-character line-length check for all new Python files;
-- Git blob-hash comparison confirming the GitHub source files match the venv-tested sandbox
-  files exactly.
+- Git blob-hash comparisons confirming feature-branch source matches the exact venv-tested files.
 
-Validated failure modes include checksum mismatch without publication, download mismatch without
-replacing an existing destination, bounded transient retry, retry after partial upload-stream
-consumption, temporary-key cleanup, empty explicit multipart fallback, and automatic multipart
-selection above threshold.
+Validated failure/recovery behavior includes checksum mismatch without publication, atomic local
+replacement, bounded transient S3 retry, retry after partial upload-stream consumption, temporary
+S3-key cleanup, multipart cleanup/fallback, artifact tamper and size-mismatch detection, invalid
+manifest rejection, manifest-last publication, and interrupted bulk upload followed by restart
+without retransferring the already verified object.
 
 ## Phase 2 test checklist status
 
 - [x] Local backend unit tests.
 - [ ] **BLOCKED** — S3 integration tests against a real test bucket or S3-compatible emulator.
-- [ ] Interrupted upload recovery test beyond the unit-level retry/cleanup cases.
+- [x] Interrupted upload recovery/resume test at the bulk-transfer level.
 - [x] Checksum mismatch detection test.
-- [ ] Manifest verification test — belongs to the Artifact manifests section.
+- [x] Manifest verification test.
 
-The next implementation section is **Artifact manifests**. The real S3 integration blocker does
-not prevent that section from proceeding because the abstraction and deterministic local test path
-are available.
+## Gate
+
+The complete local functional gate passes: a generated artifact can be published to durable local
+storage with a manifest, the source can be deleted, the bytes can be restored through the resumable
+bulk-transfer path, and the restored/stored artifact can be checksum/manifest verified without
+manual steps.
+
+**BLOCKED — provider integration only:** repeat the same round-trip against GMI Cold Storage and,
+if used, an external S3-compatible staging provider before Phase 2 is declared fully complete.
