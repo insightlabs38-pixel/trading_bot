@@ -86,7 +86,7 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | Phase | Status | Required before H200? |
 |---|---|---|
 | 0. Repository/design baseline | **COMPLETE** | Yes |
-| 1. Project/config foundations | **IN PROGRESS** | Yes |
+| 1. Project/config foundations | **BLOCKED** | Yes |
 | 2. Storage + artifact primitives | Not started | Yes |
 | 3. CPU data pipeline | Not started | Yes |
 | 4. Dataset validation + leakage protection | Not started | Yes |
@@ -182,35 +182,38 @@ Create the common project infrastructure all later modules depend on.
 
 ### Common metadata
 
-- [ ] Define identifiers for:
-  - [ ] dataset version;
-  - [ ] split version;
-  - [ ] model configuration;
-  - [ ] trial;
-  - [ ] campaign;
-  - [ ] checkpoint;
-  - [ ] prediction artifact.
-- [ ] Implement config hashing/canonical serialization.
-- [ ] Implement Git SHA/container/environment capture helpers.
+- [x] Define identifiers for:
+  - [x] dataset version;
+  - [x] split version;
+  - [x] model configuration;
+  - [x] trial;
+  - [x] campaign;
+  - [x] checkpoint;
+  - [x] prediction artifact.
+- [x] Implement config hashing/canonical serialization.
+- [x] Implement Git SHA/container/environment capture helpers.
 
 ## Tests
 
 - [x] Config round-trip tests.
 - [x] Invalid config rejection tests.
 - [x] Environment-variable substitution tests.
-- [ ] Stable config-hash tests.
+- [x] Stable config-hash tests.
 
 ### Progress note — 2026-08-18
 
-- Completed: Python project section and Configuration system section.
-- Verified by: configuration test suite passes in the available sandbox (`20 passed` under Python 3.13.5, Pydantic 2.13.4, PyYAML 6.0.3, pytest 9.0.2); configuration package/tests also pass `compileall`.
-- Contract alignment: AI repair is provider-neutral; paper/live numeric risk limits remain deliberately unfrozen until explicitly configured; evaluation cost configuration requires fee, spread, slippage, and impact components.
-- **BLOCKED — target-environment confirmation:** the sandbox does not provide the pinned Python 3.12 runtime, Ruff, or mypy, and package-index access is unavailable. The supported Python 3.12/uv lint/type/test confirmation must therefore be run externally before the Phase 1 gate is declared passed.
-- Remaining blocker: Common metadata, stable config hashing/tests, and the minimal run-manifest command.
+- Completed: Python project, Configuration system, and Common metadata sections.
+- Verified by: combined configuration/common-metadata suite passes in the available sandbox (`36 passed` under Python 3.13.5, Pydantic 2.13.4, PyYAML 6.0.3, pytest 9.0.2); `compileall` also passes.
+- Common metadata: typed immutable dataset/split/model/trial/campaign/checkpoint/prediction IDs; stable SHA-256 config hashing; content-derived model IDs; Git/container/runtime capture; immutable run manifests; and a `python -m trading_bot.metadata` CLI.
+- CLI gate smoke: a validated config can generate a run manifest without market data or a GPU when an explicit Git SHA is supplied for the sandboxed checkout.
+- **BLOCKED — target-environment confirmation:** the sandbox does not provide the pinned Python 3.12 runtime, Ruff, or mypy, and package-index access is unavailable. The supported Python 3.12/uv lint/type/full-test confirmation must therefore be run externally before the Phase 1 gate is declared passed.
+- Remaining blocker: target-environment confirmation only.
 
 ## Gate
 
 A minimal command can load a validated configuration, generate a run manifest, and exit successfully on any supported machine without requiring market data or a GPU.
+
+**BLOCKED — target-environment confirmation.** The functional gate passes in the available sandbox, but the supported Python 3.12/Ruff/mypy validation cannot be performed here.
 
 ---
 
@@ -1427,7 +1430,7 @@ Do not allow these to distract from the critical path unless the plan is explici
 When coding begins, the recommended first commits are:
 
 1. [ ] `pyproject.toml`, dependency lock, package skeleton, lint/test configuration.
-2. [ ] Validated configuration schemas and run-manifest utilities.
+2. [x] Validated configuration schemas and run-manifest utilities.
 3. [ ] Local + S3 storage abstraction and checksum manifests.
 4. [ ] Data vendor interface plus small-sample downloader.
 5. [ ] Raw validation/security-master/resampling pipeline.
