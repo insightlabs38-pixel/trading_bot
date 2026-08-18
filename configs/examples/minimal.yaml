@@ -1,0 +1,71 @@
+schema_version: 1
+
+storage:
+  backend: local
+  root_path: ${TRADING_DATA_ROOT:-/tmp/trading-bot-data}
+
+dataset:
+  version: dataset_dev_v001
+  universe_target_size: 1000
+  base_bar_frequency: 1m
+  primary_horizons_minutes: [15, 30]
+  auxiliary_horizons_minutes: [5, 60]
+  final_holdout_id: holdout_dev_v001
+
+preprocessing:
+  worker_count: 4
+  scratch_path: ${TRADING_SCRATCH:-/tmp/trading-bot-scratch}
+
+model:
+  family: mlp
+  variant: smoke
+  heads: [return, rank, volatility]
+  parameters:
+    hidden_dim: 128
+    layers: 2
+
+training:
+  batch_size: 64
+  gradient_accumulation_steps: 1
+  max_steps: 100
+  learning_rate: 0.001
+  precision: fp32
+  compile_mode: "off"
+  seed: 42
+
+objective:
+  kind: multitask
+  horizons_minutes: [15, 30]
+  loss: composite
+  task_weights:
+    return: 1.0
+    rank: 1.0
+    volatility: 0.25
+
+evaluation:
+  annualization_days: 252
+  fee_bps: 0.2
+  slippage_bps: 1.0
+  impact_bps: 0.5
+
+campaign:
+  campaign_id: dev_smoke
+  max_duration_hours: 2
+  seeds: [17, 29, 43]
+  mandatory_families: [mlp]
+
+scheduler:
+  heartbeat_interval_seconds: 15
+  heartbeat_timeout_seconds: 180
+  initial_drain_reserve_minutes: 30
+
+notifications:
+  enabled: false
+
+ai_repair:
+  enabled: false
+
+paper_live_risk:
+  max_position_weight: 0.02
+  max_gross_exposure: 1.0
+  max_abs_net_exposure: 0.20
