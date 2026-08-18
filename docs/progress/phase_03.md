@@ -43,14 +43,21 @@ and audit recording remain shared infrastructure.
 - [x] Duplicate asset/timestamp detection.
 - [x] Impossible OHLC and invalid price/volume/VWAP detection.
 - [x] Missing intraday interval and out-of-order detection.
+- [x] Whole-session completeness checks when the caller supplies the expected session-date set.
+- [x] Expected-session validation remains calendar/provider independent; production exchange
+  calendars can feed the validator without changing its contract.
 - [x] Structured anomaly reports; raw rows are never silently repaired or deduplicated.
 
 ## Security master
 
 - [x] Permanent security IDs, point-in-time symbol history, listing/delisting dates.
+- [x] Every security must have at least one symbol-history period.
 - [x] Security type, exchange, sector/issuer metadata.
 - [x] Corporate actions and historical delisted-security lookup.
 - [x] Overlap guards prevent ticker reuse from splicing unrelated securities.
+- [x] Symbol-change actions must agree with the immediately prior symbol and the new symbol's
+  effective-date period; no-op symbol changes are rejected.
+- [x] Chronological symbol-history lookup is exposed for downstream point-in-time consumers.
 
 ## Adjustment/canonicalization
 
@@ -127,17 +134,28 @@ validated in the earlier dedicated sandbox run:
 114 passed
 ```
 
-For the new provider-neutral HTTP transport, a focused sandbox mirror of the existing acquisition
-and local-storage contracts runs the repository test file successfully:
+For the provider-neutral HTTP transport, a focused sandbox mirror of the existing acquisition and
+local-storage contracts runs successfully:
 
 ```text
 17 passed
 ```
 
-The focused cases cover header/query runtime authentication, secret non-persistence, sanitized
-metadata, HTTPS/userinfo/credential-query rejection, transient/permanent HTTP classification,
-transport errors, exact-byte preservation, and acquisition-runner integration. Both the new source
-and tests compile successfully and satisfy the repository's 100-character line policy.
+For the Raw validation + Security master increment, the existing tests and new regression tests run
+together in the current sandbox mirror:
+
+```text
+26 passed
+```
+
+The current increment also passes `compileall` and the repository's 100-character line policy. Git
+blob hashes for the changed source files match the exact sandbox-tested copies.
+
+The focused Raw validation cases include UTC/timezone checks, duplicates, OHLC/price/volume/VWAP
+corruption, missing intervals, out-of-order rows, and wholly missing expected sessions without any
+silent repair. Security-master cases cover point-in-time ticker resolution, delisted names,
+classification/exchange metadata, listing boundaries, corporate-action fields, overlap prevention,
+required symbol history, and symbol-change/history consistency.
 
 A real broad-equities or execution-provider request is intentionally not claimed as validated: this
 sandbox has no selected subscription contract, credentials, or reachable provider endpoint.

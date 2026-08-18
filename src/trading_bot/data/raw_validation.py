@@ -32,6 +32,7 @@ class AnomalyCode(StrEnum):
     INVALID_PRICE = "invalid_price"
     INVALID_VOLUME = "invalid_volume"
     INVALID_VWAP = "invalid_vwap"
+    MISSING_SESSION = "missing_session"
     MISSING_INTERVAL = "missing_interval"
     OUT_OF_ORDER = "out_of_order"
 
@@ -63,19 +64,32 @@ def validate_raw_bars(
     *,
     expected_interval: timedelta = timedelta(minutes=1),
     detect_missing_intervals: bool = True,
+    expected_sessions: Iterable[date] | None = None,
 ) -> RawValidationReport:
-    """Inspect raw bars and report anomalies without mutating or repairing input rows."""
+    """Inspect raw bars and report anomalies without mutating or repairing input rows.
+
+    ``expected_sessions`` is intentionally supplied by the caller instead of embedding an exchange
+    calendar here. This keeps raw validation provider/calendar independent while still allowing an
+    acquisition run to prove that an expected trading session is wholly absent for an observed
+    asset. Session dates are interpreted at the existing UTC validation boundary.
+    """
     if expected_interval <= timedelta(0):
         raise ValueError("expected_interval must be positive")
+
+    session_dates = None if expected_sessions is None else tuple(expected_sessions)
+    if session_dates is not None and len(set(session_dates)) != len(session_dates):
+        raise ValueError("expected_sessions must not contain duplicate dates")
 
     rows = tuple(bars)
     anomalies: list[RawDataAnomaly] = []
     seen: Counter[tuple[str, datetime]] = Counter()
     by_asset_session: dict[tuple[str, date], list[datetime]] = defaultdict(list)
     previous_by_asset: dict[str, datetime] = {}
+    observed_assets: set[str] = set()
 
     for bar in rows:
         timestamp = bar.timestamp
+        observed_assets.add(bar.asset_id)
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
             anomalies.append(
                 RawDataAnomaly(
@@ -168,6 +182,13 @@ def validate_raw_bars(
                 )
             )
 
+    if session_dates is not None:
+        _append_missing_session_anomalies(
+            observed_assets,
+            set(session_dates),
+            by_asset_session,
+            anomalies,
+        )
     if detect_missing_intervals:
         _append_missing_interval_anomalies(by_asset_session, expected_interval, anomalies)
 
@@ -177,6 +198,27 @@ def validate_raw_bars(
         anomaly_counts=dict(counts),
         anomalies=tuple(anomalies),
     )
+
+
+def _append_missing_session_anomalies(
+    assets: set[str],
+    expected_sessions: set[date],
+    grouped: dict[tuple[str, date], list[datetime]],
+    anomalies: list[RawDataAnomaly],
+) -> None:
+    observed = set(grouped)
+    for asset_id in sorted(assets):
+        for session_date in sorted(expected_sessions):
+            if (asset_id, session_date) in observed:
+                continue
+            anomalies.append(
+                RawDataAnomaly(
+                    AnomalyCode.MISSING_SESSION,
+                    asset_id,
+                    None,
+                    f"expected session {session_date.isoformat()} has no raw bars",
+                )
+            )
 
 
 def _append_missing_interval_anomalies(

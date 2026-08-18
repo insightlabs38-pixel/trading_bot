@@ -88,6 +88,8 @@ class CorporateAction(BaseModel):
         if self.action_type == CorporateActionType.SYMBOL_CHANGE:
             if not self.old_symbol or not self.new_symbol:
                 raise ValueError("symbol change requires old_symbol and new_symbol")
+            if self.old_symbol == self.new_symbol:
+                raise ValueError("symbol change requires distinct old_symbol and new_symbol")
         return self
 
 
@@ -122,6 +124,9 @@ class SecurityMaster(BaseModel):
             periods_by_security[period.security_id].append(period)
             periods_by_symbol[period.symbol].append(period)
 
+        for security_id in records:
+            if not periods_by_security.get(security_id):
+                raise ValueError(f"security {security_id} must have at least one symbol period")
         for periods in periods_by_security.values():
             _assert_non_overlapping(periods, "overlapping symbol periods for one security")
         for periods in periods_by_symbol.values():
@@ -134,6 +139,8 @@ class SecurityMaster(BaseModel):
                 raise ValueError(message)
             if not record.is_listed_on(action.effective_date):
                 raise ValueError("corporate action must fall within listing/delisting dates")
+            if action.action_type == CorporateActionType.SYMBOL_CHANGE:
+                _validate_symbol_change_action(action, periods_by_security[action.security_id])
         return self
 
     def get_security(self, security_id: str) -> SecurityRecord:
@@ -166,6 +173,11 @@ class SecurityMaster(BaseModel):
             raise KeyError(f"security {record.security_id} is not listed on {as_of}")
         return record
 
+    def symbol_history(self, security_id: str) -> tuple[SymbolPeriod, ...]:
+        self.get_security(security_id)
+        periods = [period for period in self.symbols if period.security_id == security_id]
+        return tuple(sorted(periods, key=lambda period: period.start_date))
+
     def active_common_equities(self, as_of: date) -> tuple[SecurityRecord, ...]:
         return tuple(
             record
@@ -187,6 +199,33 @@ class SecurityMaster(BaseModel):
             and (through is None or action.effective_date <= through)
         ]
         return tuple(sorted(actions, key=lambda action: action.effective_date))
+
+
+def _validate_symbol_change_action(
+    action: CorporateAction,
+    periods: list[SymbolPeriod],
+) -> None:
+    assert action.old_symbol is not None and action.new_symbol is not None
+    new_periods = [
+        period
+        for period in periods
+        if period.symbol == action.new_symbol and period.start_date == action.effective_date
+    ]
+    if len(new_periods) != 1:
+        raise ValueError("symbol change action new_symbol/effective_date must match symbol history")
+
+    prior_periods = [
+        period
+        for period in periods
+        if period.end_date is not None and period.end_date < action.effective_date
+    ]
+    if not prior_periods:
+        raise ValueError("symbol change action requires prior symbol history")
+    prior = max(prior_periods, key=lambda period: period.end_date or period.start_date)
+    if prior.symbol != action.old_symbol:
+        raise ValueError(
+            "symbol change action old_symbol must match immediately prior symbol history"
+        )
 
 
 def _assert_non_overlapping(periods: list[SymbolPeriod], message: str) -> None:
