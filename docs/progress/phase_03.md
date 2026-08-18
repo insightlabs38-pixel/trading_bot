@@ -146,18 +146,34 @@ validated externally after the intended CPU dependencies are available.
 - [x] Label generation is a separate module and never imports or calls the feature pipeline.
 - [x] Extending data beyond an already defined horizon does not alter that existing target.
 
+## Splits
+
+- [x] Versioned immutable split manifest independent of model/training code.
+- [x] Chronological walk-forward folds with expanding-window training support.
+- [x] Training periods must end before their validation period begins.
+- [x] Validation periods are ordered and cannot overlap/move backward.
+- [x] Dataset version, split version, fold IDs, and final-holdout ID are persisted explicitly.
+- [x] Stable canonical split-manifest serialization and SHA-256 identity.
+- [x] Final holdout must begin after every routine train/validation period.
+- [x] Routine partition lookup intentionally returns no final-holdout membership.
+- [x] Final-holdout range requires explicit `FINAL_EVALUATION` access; routine research is denied.
+
+**BLOCKED — production split dates:** the real training/validation/final-holdout calendar boundaries
+are intentionally not invented in code. They must be frozen against the finalized production data
+period before the production split manifest can be checked as complete.
+
 ## Validation performed
 
 All implemented Phase 3 data-contract tests plus the complete Phase 2 storage suite pass in the
 dedicated sandbox venv:
 
 ```text
-101 passed
+109 passed
 ```
 
 `compileall` passes and all new files satisfy the repository's 100-character line-length policy.
 Git blob hashes are checked against the exact sandbox-tested files before section merge.
 
-The next implementable section is **Splits**. Actual production fold/holdout dates will remain
-unfrozen until the production dataset period is finalized, but the immutable split-manifest and
-final-holdout access guard can be implemented and tested now.
+The next Phase 3 section is **Packing**. Research Parquet/Zstd and final production loader choices are
+partially blocked by missing PyArrow/Polars/DuckDB and the plan's benchmark-before-final-format rule;
+a dependency-light reference packed representation/loader benchmark can still be implemented next.
