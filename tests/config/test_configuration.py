@@ -9,8 +9,10 @@ import pytest
 from pydantic import ValidationError
 
 from trading_bot.config import (
+    AIRepairConfig,
     AppConfig,
     MissingEnvironmentVariableError,
+    PaperLiveRiskConfig,
     config_to_canonical_json,
     config_to_manifest_dict,
     interpolate_environment,
@@ -25,6 +27,8 @@ def test_example_config_loads() -> None:
     assert isinstance(config, AppConfig)
     assert config.dataset.primary_horizons_minutes == (15, 30)
     assert config.storage.root_path == "/tmp/trading-bot-data"
+    assert config.evaluation.spread_bps == 1.0
+    assert not config.paper_live_risk.enabled
 
 
 def test_config_round_trip() -> None:
@@ -60,6 +64,17 @@ def test_environment_substitution_and_default(tmp_path: Path) -> None:
     )
     assert config.storage.root_path == "/data"
     assert config.preprocessing.scratch_path == "/scratch"
+
+
+def test_environment_interpolation_supports_secret_and_endpoint_values() -> None:
+    payload = {
+        "endpoint": "${S3_ENDPOINT}",
+        "secret": "${TOKEN}",
+    }
+    assert interpolate_environment(
+        payload,
+        environ={"S3_ENDPOINT": "https://s3.example", "TOKEN": "secret"},
+    ) == {"endpoint": "https://s3.example", "secret": "secret"}
 
 
 def test_missing_environment_variable_is_rejected() -> None:
@@ -109,9 +124,75 @@ def test_manifest_serialization_redacts_secrets(tmp_path: Path) -> None:
     assert "secret.example" not in config_to_canonical_json(config)
 
 
-def test_canonical_serialization_is_stable() -> None:
+def test_canonical_serialization_is_stable_and_order_independent() -> None:
     config = load_config(EXAMPLE_CONFIG, environ={})
-    first = config_to_canonical_json(config)
-    second = config_to_canonical_json(config)
-    assert first == second
-    assert json.loads(first)["campaign"]["campaign_id"] == "dev_smoke"
+    payload = config.model_dump(mode="python")
+    payload["model"]["parameters"] = {"layers": 2, "hidden_dim": 128}
+    reordered = AppConfig.model_validate(payload)
+    assert config_to_canonical_json(config) == config_to_canonical_json(reordered)
+    assert json.loads(config_to_canonical_json(config))["campaign"]["campaign_id"] == "dev_smoke"
+
+
+def test_model_parameters_must_be_json_compatible() -> None:
+    config = load_config(EXAMPLE_CONFIG, environ={})
+    payload = config.model_dump(mode="python")
+    payload["model"]["parameters"] = {"bad": object()}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_ai_repair_provider_is_not_hardcoded() -> None:
+    config = AIRepairConfig(
+        enabled=True,
+        provider="example-provider",
+        model="repair-model-v1",
+        api_base_url="https://api.example.test",
+        api_key="secret",
+    )
+    assert config.provider == "example-provider"
+    assert config.model == "repair-model-v1"
+
+
+def test_enabled_ai_repair_requires_explicit_provider_model_and_key() -> None:
+    with pytest.raises(ValidationError, match="provider settings"):
+        AIRepairConfig(enabled=True)
+
+
+def test_disabled_paper_live_risk_does_not_invent_numeric_limits() -> None:
+    config = PaperLiveRiskConfig()
+    assert not config.enabled
+    assert config.max_position_weight is None
+    assert config.daily_loss_limit_fraction is None
+
+
+def test_enabled_paper_live_risk_requires_explicit_limits() -> None:
+    with pytest.raises(ValidationError, match="explicit limits"):
+        PaperLiveRiskConfig(enabled=True)
+
+
+def test_enabled_paper_live_risk_requires_safety_gates() -> None:
+    payload = {
+        "enabled": True,
+        "max_position_weight": 0.02,
+        "max_gross_exposure": 1.0,
+        "max_abs_net_exposure": 0.2,
+        "max_leverage": 1.0,
+        "max_order_nav_fraction": 0.01,
+        "max_participation_rate": 0.05,
+        "daily_loss_limit_fraction": 0.02,
+        "drawdown_stop_fraction": 0.05,
+        "max_data_age_seconds": 90,
+        "model_inference_timeout_seconds": 10,
+        "max_outstanding_orders": 50,
+        "kill_switch_enabled": False,
+    }
+    with pytest.raises(ValidationError, match="safety gates"):
+        PaperLiveRiskConfig.model_validate(payload)
+
+
+def test_evaluation_cost_accounting_requires_spread() -> None:
+    config = load_config(EXAMPLE_CONFIG, environ={})
+    payload = config.model_dump(mode="python")
+    del payload["evaluation"]["spread_bps"]
+    with pytest.raises(ValidationError, match="spread_bps"):
+        AppConfig.model_validate(payload)
