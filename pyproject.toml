@@ -1,0 +1,99 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trading-bot"
+version = "0.1.0"
+description = "Research and execution framework for a medium-frequency U.S. equities trading system."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+# This is an internal research project, so operational dependencies are grouped by
+# environment instead of being published as package runtime requirements.
+[dependency-groups]
+core = [
+    "pydantic>=2.11,<3",
+    "pyyaml>=6.0,<7",
+    "rich>=14,<15",
+]
+cpu = [
+    { include-group = "core" },
+    "blake3>=1.0,<2",
+    "boto3>=1.40,<2",
+    "duckdb>=1.3,<2",
+    "numba>=0.61,<1",
+    "numpy>=2.1,<2.3",
+    "polars>=1.32,<2",
+    "psutil>=7,<8",
+    "pyarrow>=21,<22",
+    "scipy>=1.15,<2",
+    "zstandard>=0.23,<1",
+]
+gpu = [
+    { include-group = "cpu" },
+    "nvidia-ml-py>=13,<14",
+    "optuna>=4.5,<5",
+    "safetensors>=0.6,<1",
+]
+dev = [
+    "mypy>=2.1,<3",
+    "ruff>=0.12,<1",
+]
+test = [
+    "pytest>=9,<10",
+    "pytest-cov>=7,<8",
+]
+
+[tool.uv]
+required-version = ">=0.10,<0.11"
+default-groups = ["core", "dev", "test"]
+
+# PyTorch, Triton, CUDA libraries, and Transformer Engine are intentionally not
+# installed by uv. The GPU environment will inherit those from a pinned NVIDIA
+# NGC PyTorch image so project dependency syncing cannot replace that stack.
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trading_bot"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+    "--import-mode=importlib",
+]
+testpaths = ["tests"]
+xfail_strict = true
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src/trading_bot"]
+strict = true
+warn_unreachable = true
+warn_unused_configs = true
+show_error_codes = true
+pretty = true
+
+[tool.coverage.run]
+branch = true
+source = ["trading_bot"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
