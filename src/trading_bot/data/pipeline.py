@@ -124,7 +124,8 @@ class StageArtifactRef(BaseModel):
     @classmethod
     def validate_sha256(cls, value: str) -> str:
         normalized = value.lower()
-        if len(normalized) != 64 or any(char not in "0123456789abcdef" for char in normalized):
+        invalid = any(char not in "0123456789abcdef" for char in normalized)
+        if len(normalized) != 64 or invalid:
             raise ValueError("SHA-256 values must be 64 hexadecimal characters")
         return normalized
 
@@ -315,13 +316,17 @@ class StageRunner:
             verify_artifact_manifest(self.backend, manifest)
             _assert_completed_manifest_lineage(manifest, spec)
             if manifest.manifest_sha256() != reference.manifest_sha256:
-                raise StagePublicationError("stage artifact manifest hash does not match success marker")
+                raise StagePublicationError(
+                    "stage artifact manifest hash does not match success marker"
+                )
             if manifest.artifact_key != reference.artifact_key:
                 raise StagePublicationError("stage artifact key does not match success marker")
             if manifest.checksum != reference.artifact_sha256:
                 raise StagePublicationError("stage artifact checksum does not match success marker")
             if manifest.size_bytes != reference.size_bytes:
                 raise StagePublicationError("stage artifact size does not match success marker")
+            if manifest.metadata.get("artifact_name") != reference.name:
+                raise StagePublicationError("stage artifact name does not match success marker")
         return marker
 
 
@@ -381,7 +386,9 @@ def _assert_completed_manifest_lineage(
     spec: StageRunSpec,
 ) -> None:
     if manifest.generation_stage != spec.stage.value:
-        raise StagePublicationError("stage manifest generation stage does not match requested stage")
+        raise StagePublicationError(
+            "stage manifest generation stage does not match requested stage"
+        )
     if manifest.upstream_ids != spec.upstream_ids:
         raise StagePublicationError("stage manifest upstream IDs do not match requested lineage")
     if manifest.producer_git_sha != spec.producer_git_sha:
@@ -397,6 +404,8 @@ def _assert_completed_manifest_lineage(
 def _safe_identifier(value: str, field_name: str) -> str:
     normalized = value.strip()
     allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
+    if normalized in {".", ".."}:
+        raise ValueError(f"{field_name} must not be a relative-path token")
     if not normalized or any(character not in allowed for character in normalized):
         raise ValueError(f"{field_name} must use only letters, digits, '-', '_', or '.'")
     return normalized
