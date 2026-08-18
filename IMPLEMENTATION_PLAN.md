@@ -300,7 +300,7 @@ The intended stage boundary is:
 02 security master
 03 adjusted/canonical
 04 resampled
-05 point_in_time_universe
+05 point-in-time universe
 06 features
 07 labels
 08 immutable splits
