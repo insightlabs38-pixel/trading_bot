@@ -54,17 +54,32 @@ missing intraday bars. Calendar/session semantics are handled in the later resam
 - [x] Overlap guards prevent ticker reuse from splicing unrelated securities together.
 - [x] Corporate actions must reference a known security and occur during its listed lifetime.
 
+## Adjustment/canonicalization
+
+- [x] Raw prices/volume/VWAP are preserved explicitly in every canonical bar.
+- [x] Permanent security ID and point-in-time symbol are attached to canonical observations.
+- [x] Cumulative split factors use only actions effective on or before the bar date.
+- [x] Split-normalized prices and inverse-adjusted volume provide a continuous causal share basis.
+- [x] Future split actions do not alter historical canonical observations.
+- [x] Cash dividends are recorded explicitly rather than silently folded into prices.
+- [x] An explicit total-return helper incorporates same-date cash dividends on the causal share basis.
+- [x] Corporate-action/symbol boundaries are resolved through the point-in-time security master.
+
+The implementation intentionally avoids a hidden back-adjusted/total-return vendor convention. Any
+later research representation can derive such a view from explicit raw values and action records,
+but causal features never receive future corporate-action information.
+
 ## Validation performed
 
-Vendor Acquisition + Raw Validation + Security Master tests plus the complete Phase 2 storage suite
-pass in the dedicated sandbox venv:
+Vendor Acquisition + Raw Validation + Security Master + Canonicalization tests plus the complete
+Phase 2 storage suite pass in the dedicated sandbox venv:
 
 ```text
-60 passed
+66 passed
 ```
 
 `compileall` passes and the new files satisfy the repository's 100-character line-length policy.
 Git blob hashes are checked against the exact sandbox-tested files before section merge.
 
-The provider blockers do not prevent the next section, **Adjustment/canonicalization**, from being
-implemented and tested against synthetic security-master/corporate-action fixtures.
+The provider blockers do not prevent the next section, **Resampling**, from being implemented and
+tested with synthetic session-aware fixtures.
