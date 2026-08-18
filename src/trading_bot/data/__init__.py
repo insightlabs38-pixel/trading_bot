@@ -139,3 +139,21 @@ __all__ += [
     "LabelRow",
     "generate_labels",
 ]
+
+from trading_bot.data.splits import (
+    DateRange,
+    FinalHoldoutAccess,
+    FinalHoldoutAccessError,
+    SplitManifest,
+    SplitManifestError,
+    WalkForwardFold,
+)
+
+__all__ += [
+    "DateRange",
+    "FinalHoldoutAccess",
+    "FinalHoldoutAccessError",
+    "SplitManifest",
+    "SplitManifestError",
+    "WalkForwardFold",
+]
