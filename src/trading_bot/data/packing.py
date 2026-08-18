@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import shutil
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -36,6 +37,10 @@ class TrainingSample:
             raise ValueError("features must not be empty")
         if not self.targets:
             raise ValueError("targets must not be empty")
+        if any(not math.isfinite(value) for value in self.features):
+            raise ValueError("features must contain only finite values")
+        if any(not math.isfinite(value) for value in self.targets):
+            raise ValueError("targets must contain only finite values")
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,19 +78,16 @@ class PackedDataset:
             self.metadata = json.loads((self.path / "metadata.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise PackingError(f"invalid packed dataset metadata: {exc}") from exc
-        if self.metadata.get("schema_version") != 1:
-            raise PackingError("unsupported packed dataset schema version")
+        _validate_metadata(self.metadata)
         _verify_files(self.path, self.metadata["files"])
-        self.features = np.load(self.path / "features.npy", mmap_mode="r")
-        self.targets = np.load(self.path / "targets.npy", mmap_mode="r")
-        self.timestamps_ns = np.load(self.path / "timestamps_ns.npy", mmap_mode="r")
-        self.asset_ids = np.load(self.path / "asset_ids.npy", mmap_mode="r")
-        expected_samples = int(self.metadata["sample_count"])
-        if not all(
-            len(array) == expected_samples
-            for array in (self.features, self.targets, self.timestamps_ns, self.asset_ids)
-        ):
-            raise PackingError("packed arrays do not share the metadata sample count")
+        try:
+            self.features = np.load(self.path / "features.npy", mmap_mode="r")
+            self.targets = np.load(self.path / "targets.npy", mmap_mode="r")
+            self.timestamps_ns = np.load(self.path / "timestamps_ns.npy", mmap_mode="r")
+            self.asset_ids = np.load(self.path / "asset_ids.npy", mmap_mode="r")
+        except (OSError, ValueError) as exc:
+            raise PackingError(f"invalid packed array: {exc}") from exc
+        _validate_array_shapes(self)
 
     def iter_batches(
         self,
@@ -119,6 +121,11 @@ def pack_training_data(
         raise PackingError("at least one training sample is required")
     if not feature_names or not target_names:
         raise PackingError("feature_names and target_names must not be empty")
+    if any(not name.strip() for name in feature_names + target_names):
+        raise PackingError("feature and target names must not contain blanks")
+    if not dataset_version.strip() or not split_version.strip():
+        raise PackingError("dataset_version and split_version must not be blank")
+
     feature_count = len(feature_names)
     target_count = len(target_names)
     if any(len(row.features) != feature_count for row in rows):
@@ -127,6 +134,10 @@ def pack_training_data(
         raise PackingError("sample target width does not match target_names")
     if len(set(feature_names)) != feature_count or len(set(target_names)) != target_count:
         raise PackingError("feature and target names must be unique")
+    identities = [(row.security_id, row.timestamp) for row in rows]
+    if len(set(identities)) != len(identities):
+        raise PackingError("duplicate security/timestamp training samples are not allowed")
+    _validate_float32_representable(rows)
 
     ordered = tuple(sorted(rows, key=lambda row: (row.timestamp, row.security_id)))
     destination = Path(destination)
@@ -190,6 +201,13 @@ def benchmark_loader(dataset: PackedDataset, *, batch_size: int = 1024) -> Loade
     return LoaderBenchmark(count, bytes_read, max(0.0, time.perf_counter() - start))
 
 
+def _validate_float32_representable(rows: tuple[TrainingSample, ...]) -> None:
+    limit = float(np.finfo(np.float32).max)
+    for row in rows:
+        if any(abs(value) > limit for value in row.features + row.targets):
+            raise PackingError("training values must be representable as finite float32 values")
+
+
 def _write_arrays(
     path: Path,
     rows: tuple[TrainingSample, ...],
@@ -213,10 +231,58 @@ def _write_arrays(
     for index, row in enumerate(rows):
         features[index] = row.features
         targets[index] = row.targets
-        timestamps[index] = int(row.timestamp.timestamp() * 1_000_000_000)
+        timestamps[index] = _timestamp_to_ns(row.timestamp)
         assets[index] = row.security_id
     for array in (features, targets, timestamps, assets):
         array.flush()
+
+
+def _timestamp_to_ns(value: datetime) -> int:
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
+    delta = value.astimezone(UTC) - epoch
+    microseconds = (
+        (delta.days * 86_400 + delta.seconds) * 1_000_000 + delta.microseconds
+    )
+    nanoseconds = microseconds * 1_000
+    limits = np.iinfo(np.int64)
+    if not limits.min <= nanoseconds <= limits.max:
+        raise PackingError("timestamp is outside the signed int64 nanosecond range")
+    return nanoseconds
+
+
+def _validate_metadata(metadata: object) -> None:
+    if not isinstance(metadata, dict):
+        raise PackingError("packed dataset metadata must be a JSON object")
+    if metadata.get("schema_version") != 1:
+        raise PackingError("unsupported packed dataset schema version")
+    if metadata.get("format") != "numpy_npy_memmap_reference":
+        raise PackingError("unsupported packed dataset format")
+    required_files = {"features.npy", "targets.npy", "timestamps_ns.npy", "asset_ids.npy"}
+    records = metadata.get("files")
+    if not isinstance(records, dict) or set(records) != required_files:
+        raise PackingError("packed dataset metadata must describe all required array files")
+    for key in ("sample_count", "feature_count", "target_count"):
+        value = metadata.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise PackingError(f"packed dataset metadata field {key} must be a non-negative integer")
+
+
+def _validate_array_shapes(dataset: PackedDataset) -> None:
+    samples = int(dataset.metadata["sample_count"])
+    features = int(dataset.metadata["feature_count"])
+    targets = int(dataset.metadata["target_count"])
+    if dataset.features.shape != (samples, features):
+        raise PackingError("feature array shape does not match metadata")
+    if dataset.targets.shape != (samples, targets):
+        raise PackingError("target array shape does not match metadata")
+    if dataset.timestamps_ns.shape != (samples,):
+        raise PackingError("timestamp array shape does not match metadata")
+    if dataset.asset_ids.shape != (samples,):
+        raise PackingError("asset ID array shape does not match metadata")
+    if dataset.features.dtype != np.float32 or dataset.targets.dtype != np.float32:
+        raise PackingError("feature and target arrays must use float32")
+    if dataset.timestamps_ns.dtype != np.int64:
+        raise PackingError("timestamp array must use int64 nanoseconds")
 
 
 def _file_record(path: Path) -> dict[str, int | str]:
@@ -225,6 +291,8 @@ def _file_record(path: Path) -> dict[str, int | str]:
 
 def _verify_files(path: Path, records: dict[str, dict[str, int | str]]) -> None:
     for name, record in records.items():
+        if not isinstance(record, dict) or "size" not in record or "sha256" not in record:
+            raise PackingError(f"invalid packed file metadata: {name}")
         file_path = path / name
         if not file_path.is_file():
             raise PackingError(f"packed file missing: {name}")
