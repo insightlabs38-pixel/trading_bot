@@ -177,3 +177,21 @@ __all__ += [
     "benchmark_loader",
     "pack_training_data",
 ]
+
+from trading_bot.data.audit import (
+    AuditObservation,
+    DatasetAuditReport,
+    NumericSummary,
+    SplitTimelineEntry,
+    UniverseTurnover,
+    build_dataset_audit_report,
+)
+
+__all__ += [
+    "AuditObservation",
+    "DatasetAuditReport",
+    "NumericSummary",
+    "SplitTimelineEntry",
+    "UniverseTurnover",
+    "build_dataset_audit_report",
+]
