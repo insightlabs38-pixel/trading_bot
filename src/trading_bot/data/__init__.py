@@ -12,12 +12,14 @@ from trading_bot.data.acquisition import (
     VendorPayload,
     VendorRequest,
 )
+from trading_bot.data.http_transport import HttpGetVendorAdapter
 
 __all__ = [
     "AcquisitionError",
     "AcquisitionRecord",
     "AcquisitionRetryPolicy",
     "AcquisitionRunner",
+    "HttpGetVendorAdapter",
     "PermanentAcquisitionError",
     "RequestRateLimiter",
     "TransientAcquisitionError",
