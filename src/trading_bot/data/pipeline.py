@@ -55,12 +55,22 @@ class StageRunSpec:
     producer_config_sha256: str | None = None
 
     def __post_init__(self) -> None:
-        _safe_identifier(self.dataset_version, "dataset_version")
-        _safe_identifier(self.stage_version, "stage_version")
-        if any(not item.strip() for item in self.upstream_ids):
+        object.__setattr__(
+            self,
+            "dataset_version",
+            _safe_identifier(self.dataset_version, "dataset_version"),
+        )
+        object.__setattr__(
+            self,
+            "stage_version",
+            _safe_identifier(self.stage_version, "stage_version"),
+        )
+        upstream_ids = tuple(item.strip() for item in self.upstream_ids)
+        if any(not item for item in upstream_ids):
             raise ValueError("upstream_ids must not contain blank identifiers")
-        if len(set(self.upstream_ids)) != len(self.upstream_ids):
+        if len(set(upstream_ids)) != len(upstream_ids):
             raise ValueError("upstream_ids must be unique")
+        object.__setattr__(self, "upstream_ids", upstream_ids)
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,8 +90,12 @@ class StageArtifactDraft:
         object.__setattr__(self, "name", normalized)
         if normalized == "_SUCCESS.json" or normalized.endswith("/_SUCCESS.json"):
             raise ValueError("artifact name must not use the reserved success-marker name")
-        if not self.artifact_schema.strip() or not self.artifact_version.strip():
+        schema = self.artifact_schema.strip()
+        version = self.artifact_version.strip()
+        if not schema or not version:
             raise ValueError("artifact schema/version must not be blank")
+        object.__setattr__(self, "artifact_schema", schema)
+        object.__setattr__(self, "artifact_version", version)
         if self.row_count is not None and self.row_count < 0:
             raise ValueError("row_count must be non-negative")
         if self.tensor_shape is not None and any(value < 0 for value in self.tensor_shape):
@@ -212,14 +226,7 @@ class StageRunner:
             f"{self._base_key(spec)}/artifacts/{checksum}/{draft.name}"
         )
         manifest_key = manifest_key_for(artifact_key)
-        metadata = dict(draft.metadata)
-        metadata.update(
-            {
-                "artifact_name": draft.name,
-                "dataset_version": spec.dataset_version,
-                "stage_version": spec.stage_version,
-            }
-        )
+        metadata = _artifact_metadata(spec, draft)
 
         if self.backend.exists(artifact_key):
             if not self.backend.verify_checksum(artifact_key, checksum):
@@ -232,7 +239,7 @@ class StageRunner:
         if self.backend.exists(manifest_key):
             manifest = load_artifact_manifest(self.backend, manifest_key)
             verify_artifact_manifest(self.backend, manifest)
-            _assert_manifest_matches(manifest, spec, draft, checksum)
+            _assert_manifest_matches(manifest, spec, draft, checksum, metadata)
         else:
             manifest = build_artifact_manifest(
                 self.backend,
@@ -286,7 +293,8 @@ class StageRunner:
                 payload = json.loads(path.read_text(encoding="utf-8"))
                 marker = StageSuccessMarker.model_validate(payload)
             except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
-                raise StagePublicationError(f"invalid stage success marker {success_key}: {exc}") from exc
+                message = f"invalid stage success marker {success_key}: {exc}"
+                raise StagePublicationError(message) from exc
 
         if (
             marker.dataset_version != spec.dataset_version
@@ -305,6 +313,7 @@ class StageRunner:
             names.add(reference.name)
             manifest = load_artifact_manifest(self.backend, reference.manifest_key)
             verify_artifact_manifest(self.backend, manifest)
+            _assert_completed_manifest_lineage(manifest, spec)
             if manifest.manifest_sha256() != reference.manifest_sha256:
                 raise StagePublicationError("stage artifact manifest hash does not match success marker")
             if manifest.artifact_key != reference.artifact_key:
@@ -314,6 +323,24 @@ class StageRunner:
             if manifest.size_bytes != reference.size_bytes:
                 raise StagePublicationError("stage artifact size does not match success marker")
         return marker
+
+
+def _artifact_metadata(
+    spec: StageRunSpec,
+    draft: StageArtifactDraft,
+) -> dict[str, JsonValue]:
+    metadata = dict(draft.metadata)
+    reserved = {
+        "artifact_name": draft.name,
+        "dataset_version": spec.dataset_version,
+        "stage_version": spec.stage_version,
+    }
+    conflicts = set(metadata).intersection(reserved)
+    if conflicts:
+        names = ", ".join(sorted(conflicts))
+        raise StagePublicationError(f"stage artifact metadata uses reserved field(s): {names}")
+    metadata.update(reserved)
+    return metadata
 
 
 def _validate_drafts(workspace: Path, drafts: tuple[StageArtifactDraft, ...]) -> None:
@@ -334,6 +361,7 @@ def _assert_manifest_matches(
     spec: StageRunSpec,
     draft: StageArtifactDraft,
     checksum: str,
+    metadata: dict[str, JsonValue],
 ) -> None:
     if manifest.checksum != checksum:
         raise StagePublicationError("existing stage manifest checksum does not match local output")
@@ -341,12 +369,29 @@ def _assert_manifest_matches(
         raise StagePublicationError("existing stage manifest schema does not match stage output")
     if manifest.artifact_version != draft.artifact_version:
         raise StagePublicationError("existing stage manifest version does not match stage output")
-    if manifest.generation_stage != spec.stage.value:
-        raise StagePublicationError("existing stage manifest generation stage does not match")
-    if manifest.upstream_ids != spec.upstream_ids:
-        raise StagePublicationError("existing stage manifest upstream IDs do not match")
     if manifest.row_count != draft.row_count or manifest.tensor_shape != draft.tensor_shape:
         raise StagePublicationError("existing stage manifest shape/count does not match stage output")
+    if manifest.metadata != metadata:
+        raise StagePublicationError("existing stage manifest metadata does not match stage output")
+    _assert_completed_manifest_lineage(manifest, spec)
+
+
+def _assert_completed_manifest_lineage(
+    manifest: ArtifactManifest,
+    spec: StageRunSpec,
+) -> None:
+    if manifest.generation_stage != spec.stage.value:
+        raise StagePublicationError("stage manifest generation stage does not match requested stage")
+    if manifest.upstream_ids != spec.upstream_ids:
+        raise StagePublicationError("stage manifest upstream IDs do not match requested lineage")
+    if manifest.producer_git_sha != spec.producer_git_sha:
+        raise StagePublicationError("stage manifest producer Git SHA does not match requested run")
+    if manifest.producer_config_sha256 != spec.producer_config_sha256:
+        raise StagePublicationError("stage manifest config hash does not match requested run")
+    if manifest.metadata.get("dataset_version") != spec.dataset_version:
+        raise StagePublicationError("stage manifest dataset version does not match requested run")
+    if manifest.metadata.get("stage_version") != spec.stage_version:
+        raise StagePublicationError("stage manifest stage version does not match requested run")
 
 
 def _safe_identifier(value: str, field_name: str) -> str:
