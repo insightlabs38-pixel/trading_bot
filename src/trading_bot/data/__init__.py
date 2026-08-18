@@ -146,6 +146,7 @@ from trading_bot.data.splits import (
     DateRange,
     FinalHoldoutAccess,
     FinalHoldoutAccessError,
+    RoutineSplitManifest,
     SplitManifest,
     SplitManifestError,
     WalkForwardFold,
@@ -155,6 +156,7 @@ __all__ += [
     "DateRange",
     "FinalHoldoutAccess",
     "FinalHoldoutAccessError",
+    "RoutineSplitManifest",
     "SplitManifest",
     "SplitManifestError",
     "WalkForwardFold",
@@ -204,6 +206,7 @@ __all__ += [
 
 from trading_bot.data.audit import (
     AuditObservation,
+    DatasetAuditError,
     DatasetAuditReport,
     NumericSummary,
     SplitTimelineEntry,
@@ -213,6 +216,7 @@ from trading_bot.data.audit import (
 
 __all__ += [
     "AuditObservation",
+    "DatasetAuditError",
     "DatasetAuditReport",
     "NumericSummary",
     "SplitTimelineEntry",
