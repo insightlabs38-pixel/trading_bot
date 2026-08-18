@@ -123,3 +123,19 @@ __all__ += [
     "FeatureRow",
     "compute_features",
 ]
+
+from trading_bot.data.labels import (
+    LabelGenerationError,
+    LabelObservation,
+    LabelPolicy,
+    LabelRow,
+    generate_labels,
+)
+
+__all__ += [
+    "LabelGenerationError",
+    "LabelObservation",
+    "LabelPolicy",
+    "LabelRow",
+    "generate_labels",
+]
