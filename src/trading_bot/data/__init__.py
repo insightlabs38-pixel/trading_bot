@@ -25,3 +25,19 @@ __all__ = [
     "VendorPayload",
     "VendorRequest",
 ]
+
+from trading_bot.data.raw_validation import (
+    AnomalyCode,
+    RawBar,
+    RawDataAnomaly,
+    RawValidationReport,
+    validate_raw_bars,
+)
+
+__all__ += [
+    "AnomalyCode",
+    "RawBar",
+    "RawDataAnomaly",
+    "RawValidationReport",
+    "validate_raw_bars",
+]
