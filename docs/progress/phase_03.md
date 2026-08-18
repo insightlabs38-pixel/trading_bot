@@ -69,17 +69,35 @@ The implementation intentionally avoids a hidden back-adjusted/total-return vend
 later research representation can derive such a view from explicit raw values and action records,
 but causal features never receive future corporate-action information.
 
+## Resampling
+
+- [x] Canonical one-minute bars are the base-resolution input contract.
+- [x] Derived 5-minute bars.
+- [x] Derived 15-minute bars.
+- [x] Derived 30-minute bars.
+- [x] Derived 60-minute bars.
+- [x] Daily session aggregates.
+- [x] `America/New_York` regular-session alignment with configurable open/close/base interval.
+- [x] Asset/date/bucket grouping prevents cross-session state leakage.
+- [x] Complete source intervals are required by default; partial buckets must be requested explicitly.
+- [x] Output timestamps use the last source observation in the bucket, preserving bar-close causality.
+- [x] Adjusted OHLCV and volume-weighted VWAP aggregation are deterministic.
+
+The reference resampler does not yet encode exchange holidays/early closes. Those require an
+explicit trading-calendar source/configuration; the current contract makes session boundaries
+explicit and is fully testable on synthetic regular-session fixtures.
+
 ## Validation performed
 
-Vendor Acquisition + Raw Validation + Security Master + Canonicalization tests plus the complete
-Phase 2 storage suite pass in the dedicated sandbox venv:
+Vendor Acquisition + Raw Validation + Security Master + Canonicalization + Resampling tests plus the
+complete Phase 2 storage suite pass in the dedicated sandbox venv:
 
 ```text
-66 passed
+78 passed
 ```
 
-`compileall` passes and the new files satisfy the repository's 100-character line-length policy.
+`compileall` passes and all new files satisfy the repository's 100-character line-length policy.
 Git blob hashes are checked against the exact sandbox-tested files before section merge.
 
-The provider blockers do not prevent the next section, **Resampling**, from being implemented and
-tested with synthetic session-aware fixtures.
+The provider/calendar limitations do not prevent the next section, **Point-in-time universe**, from
+being implemented and tested against synthetic daily liquidity/history fixtures.
