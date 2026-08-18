@@ -107,3 +107,19 @@ __all__ += [
     "build_universe_snapshot",
     "build_universe_snapshots",
 ]
+
+from trading_bot.data.features import (
+    FeatureObservation,
+    FeaturePipelineError,
+    FeaturePolicy,
+    FeatureRow,
+    compute_features,
+)
+
+__all__ += [
+    "FeatureObservation",
+    "FeaturePipelineError",
+    "FeaturePolicy",
+    "FeatureRow",
+    "compute_features",
+]
