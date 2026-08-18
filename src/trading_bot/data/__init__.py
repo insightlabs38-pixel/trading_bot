@@ -59,3 +59,17 @@ __all__ += [
     "SecurityType",
     "SymbolPeriod",
 ]
+
+from trading_bot.data.canonicalization import (
+    CanonicalBar,
+    CanonicalizationError,
+    canonicalize_bars,
+    total_return_between,
+)
+
+__all__ += [
+    "CanonicalBar",
+    "CanonicalizationError",
+    "canonicalize_bars",
+    "total_return_between",
+]
