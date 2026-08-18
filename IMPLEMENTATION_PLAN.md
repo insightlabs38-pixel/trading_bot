@@ -87,7 +87,7 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 |---|---|---|
 | 0. Repository/design baseline | **COMPLETE** | Yes |
 | 1. Project/config foundations | **BLOCKED** | Yes |
-| 2. Storage + artifact primitives | Not started | Yes |
+| 2. Storage + artifact primitives | **IN PROGRESS** | Yes |
 | 3. CPU data pipeline | Not started | Yes |
 | 4. Dataset validation + leakage protection | Not started | Yes |
 | 5. Common training framework | Not started | Yes |
@@ -227,22 +227,22 @@ Make local scratch and S3-compatible durable storage interchangeable and reliabl
 
 ### Storage abstraction
 
-- [ ] Local backend.
-- [ ] S3-compatible backend suitable for GMI Cold Storage.
-- [ ] Optional external S3-compatible staging backend.
-- [ ] Operations:
-  - [ ] list;
-  - [ ] exists;
-  - [ ] upload;
-  - [ ] multipart upload;
-  - [ ] download;
-  - [ ] copy;
-  - [ ] delete;
-  - [ ] metadata/head;
-  - [ ] checksum verification where practical.
-- [ ] Retry/backoff policy.
-- [ ] Transfer timeout policy.
-- [ ] Atomic/temporary object naming conventions.
+- [x] Local backend.
+- [ ] S3-compatible backend suitable for GMI Cold Storage. — **BLOCKED** pending real S3/GMI endpoint validation.
+- [ ] Optional external S3-compatible staging backend. — **BLOCKED** pending real external endpoint validation.
+- [x] Operations:
+  - [x] list;
+  - [x] exists;
+  - [x] upload;
+  - [x] multipart upload;
+  - [x] download;
+  - [x] copy;
+  - [x] delete;
+  - [x] metadata/head;
+  - [x] checksum verification where practical.
+- [x] Retry/backoff policy.
+- [x] Transfer timeout policy.
+- [x] Atomic/temporary object naming conventions.
 
 ### Artifact manifests
 
@@ -264,11 +264,19 @@ Make local scratch and S3-compatible durable storage interchangeable and reliabl
 
 ## Tests
 
-- [ ] Local backend unit tests.
-- [ ] S3 integration tests against a test bucket or S3-compatible local emulator.
+- [x] Local backend unit tests.
+- [ ] **BLOCKED** — S3 integration tests against a test bucket or S3-compatible local emulator.
 - [ ] Interrupted upload recovery test.
-- [ ] Checksum mismatch detection test.
+- [x] Checksum mismatch detection test.
 - [ ] Manifest verification test.
+
+### Progress note — 2026-08-18
+
+- Completed: common storage protocol, atomic local backend, S3-compatible implementation, all required storage operations, retry/backoff, transfer timeouts, temporary-key publication, automatic/explicit multipart upload, checksum verification, and config-to-backend construction.
+- Verified by: dedicated sandbox venv storage suite passes (`17 passed`); `compileall` and the repository 100-character line-length check pass; Git blob hashes match the tested files exactly.
+- S3 unit coverage includes retry after partial upload-stream consumption, multipart cleanup/fallback, separate durable/staging namespaces, checksum mismatch detection, and real boto3 timeout configuration without network I/O.
+- **BLOCKED — provider integration:** the sandbox has no reachable S3-compatible bucket/emulator or GMI Cold Storage credentials, so GMI/external-provider compatibility remains unconfirmed and those provider-specific checkboxes are intentionally left unchecked.
+- Next section: Artifact manifests. The provider-integration blocker does not prevent local implementation/testing of that section.
 
 ## Gate
 
@@ -292,7 +300,7 @@ The intended stage boundary is:
 02 security master
 03 adjusted/canonical
 04 resampled
-05 point-in-time universe
+05 point_in_time_universe
 06 features
 07 labels
 08 immutable splits
