@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
+from collections.abc import Iterable
+from datetime import date, datetime
+from typing import Protocol, cast
 from zoneinfo import ZoneInfo
 
 from trading_bot.data.resampling import SessionSpec
@@ -10,6 +12,26 @@ from trading_bot.data.resampling import SessionSpec
 
 class CalendarSessionError(ValueError):
     """Raised when a requested date is not a valid exchange trading session."""
+
+
+class _SessionLabel(Protocol):
+    def date(self) -> date: ...
+
+
+class _TimestampLike(Protocol):
+    def to_pydatetime(self) -> datetime: ...
+
+
+class _ExchangeCalendar(Protocol):
+    tz: object
+
+    def sessions_in_range(self, start: date, end: date) -> Iterable[_SessionLabel]: ...
+
+    def is_session(self, session_date: date) -> bool: ...
+
+    def session_open(self, session_date: date) -> _TimestampLike: ...
+
+    def session_close(self, session_date: date) -> _TimestampLike: ...
 
 
 class ExchangeCalendarSessionProvider:
@@ -26,13 +48,13 @@ class ExchangeCalendarSessionProvider:
         if base_interval_minutes <= 0:
             raise ValueError("base_interval_minutes must be positive")
         try:
-            import exchange_calendars as xcals
+            import exchange_calendars as xcals  # type: ignore[import-untyped]
         except ImportError as exc:  # pragma: no cover - exercised in core-only environments
             raise RuntimeError(
                 "exchange-calendars is required for production exchange session support"
             ) from exc
         try:
-            calendar = xcals.get_calendar(calendar_name)
+            calendar = cast(_ExchangeCalendar, xcals.get_calendar(calendar_name))
         except (KeyError, ValueError) as exc:
             raise ValueError(f"unknown exchange calendar: {calendar_name!r}") from exc
         self.calendar_name = calendar_name
@@ -50,7 +72,7 @@ class ExchangeCalendarSessionProvider:
 
     def is_session(self, session_date: date) -> bool:
         """Return whether ``session_date`` is an exchange trading session."""
-        return bool(self._calendar.is_session(session_date))
+        return self._calendar.is_session(session_date)
 
     def session_spec(self, session_date: date) -> SessionSpec:
         """Return exact local open/close hours, including exchange early closes."""
