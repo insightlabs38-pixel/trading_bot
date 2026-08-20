@@ -1,7 +1,7 @@
 # Detailed Implementation Plan
 
 Status: **ACTIVE IMPLEMENTATION TRACKER**  
-Last updated: **2026-08-18**
+Last updated: **2026-08-20**
 
 This document is the detailed execution plan for `trading_bot`. It is intended to be usable by the repository owner, a future human contributor, or an AI coding agent to answer four questions quickly:
 
@@ -12,19 +12,25 @@ This document is the detailed execution plan for `trading_bot`. It is intended t
 
 `PLAN.md` defines the project intent and frozen research decisions. `docs/implementation_roadmap.md` is the high-level milestone view. **This file is the implementation source of truth and progress checklist.**
 
+### Reconciliation note — 2026-08-20
+
+The Phase 3 and Phase 4 master statuses/checklists had fallen behind the repository. They are reconciled below against the code and detailed progress records on `main` through commit `c2089851bcf77b6d988b67467831ca2e8e05c279`, plus the current foundation-hardening branch. Provider-independent Phase 3/4 work is substantially implemented; their production gates remain blocked by real provider/data/hardware dependencies.
+
+CPU-only GitHub Actions verification is being added on standard `ubuntu-latest` hosted runners using the pinned Python 3.12 target. GPU/Triton/H200 checks are intentionally excluded until compatible GPU infrastructure is available.
+
 ---
 
 # 0. How to use this document
 
 ## Status convention
 
-- `[x]` — complete and acceptance criteria met.
-- `[ ]` — not complete.
-- `IN PROGRESS` — work has started but the acceptance gate is not met.
-- `BLOCKED` — cannot proceed until the stated dependency/decision is resolved.
+- `[x]` — complete and acceptance criteria met for the stated implementation item.
+- `[ ]` — not complete, externally unvalidated, or acceptance criteria not yet met.
+- `IN PROGRESS` — work has started but the phase acceptance gate is not met.
+- `BLOCKED` — cannot close the phase gate until the stated dependency/decision is resolved.
 - `OPTIONAL` — useful but not on the critical path.
 
-A task should not be checked merely because code exists. It is complete only when its tests and acceptance conditions are satisfied.
+A task should not be checked merely because code exists. It is complete only when its tests and acceptance conditions are satisfied at the scope implied by the checkbox. A phase may therefore contain many checked implementation items while its production gate remains blocked.
 
 ## Change-control rule
 
@@ -86,10 +92,10 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | Phase | Status | Required before H200? |
 |---|---|---|
 | 0. Repository/design baseline | **COMPLETE** | Yes |
-| 1. Project/config foundations | **BLOCKED** | Yes |
-| 2. Storage + artifact primitives | **IN PROGRESS** | Yes |
-| 3. CPU data pipeline | Not started | Yes |
-| 4. Dataset validation + leakage protection | Not started | Yes |
+| 1. Project/config foundations | **IN PROGRESS — Python 3.12 CI verification being added** | Yes |
+| 2. Storage + artifact primitives | **BLOCKED — real S3/GMI integration only** | Yes |
+| 3. CPU data pipeline | **BLOCKED — external/provider/production-format gates only** | Yes |
+| 4. Dataset validation + leakage protection | **BLOCKED — finalized production-data validation only** | Yes |
 | 5. Common training framework | Not started | Yes |
 | 6. Evaluation/backtesting framework | Not started | Yes |
 | 7. Baseline model families | Not started | Yes |
@@ -160,6 +166,8 @@ Create the common project infrastructure all later modules depend on.
 - [x] Configure pytest.
 - [x] Add typing policy/tooling if used.
 - [x] Add package metadata and `src/trading_bot` package initialization.
+- [x] Add CPU-only GitHub Actions verification on the supported Python 3.12 runtime.
+- [ ] Commit a dependency lock once the resolved CPU/GPU environment strategy is finalized.
 
 ### Configuration system
 
@@ -200,20 +208,20 @@ Create the common project infrastructure all later modules depend on.
 - [x] Environment-variable substitution tests.
 - [x] Stable config-hash tests.
 
-### Progress note — 2026-08-18
+### Progress note — 2026-08-20
 
-- Completed: Python project, Configuration system, and Common metadata sections.
-- Verified by: combined configuration/common-metadata suite passes in the available sandbox (`36 passed` under Python 3.13.5, Pydantic 2.13.4, PyYAML 6.0.3, pytest 9.0.2); `compileall` also passes.
-- Common metadata: typed immutable dataset/split/model/trial/campaign/checkpoint/prediction IDs; stable SHA-256 config hashing; content-derived model IDs; Git/container/runtime capture; immutable run manifests; and a `python -m trading_bot.metadata` CLI.
-- CLI gate smoke: a validated config can generate a run manifest without market data or a GPU when an explicit Git SHA is supplied for the sandboxed checkout.
-- **BLOCKED — target-environment confirmation:** the sandbox does not provide the pinned Python 3.12 runtime, Ruff, or mypy, and package-index access is unavailable. The supported Python 3.12/uv lint/type/full-test confirmation must therefore be run externally before the Phase 1 gate is declared passed.
-- Remaining blocker: target-environment confirmation only.
+- Completed: Python project/configuration/common-metadata implementation and a reusable `scripts/verify_cpu.sh` verification gate.
+- Added: `.github/workflows/cpu-ci.yml` using one standard `ubuntu-latest` runner, Python 3.12, the CPU dependency group, Ruff, Ruff format checking, mypy, `compileall`, and the full pytest suite.
+- Cost control: one job only, 20-minute timeout, and concurrency cancellation to avoid wasting hosted-runner minutes on superseded commits.
+- Previous sandbox evidence remains useful but is not the target-environment gate because it used Python 3.13.
+- Remaining gate: obtain a green Python 3.12 GitHub Actions run from the repository branch/PR.
+- Remaining reproducibility gap: a committed `uv.lock` is still desirable once the intended resolved environment policy is frozen.
 
 ## Gate
 
 A minimal command can load a validated configuration, generate a run manifest, and exit successfully on any supported machine without requiring market data or a GPU.
 
-**BLOCKED — target-environment confirmation.** The functional gate passes in the available sandbox, but the supported Python 3.12/Ruff/mypy validation cannot be performed here.
+**IN PROGRESS — target-environment CI verification.** The functional gate already passes in sandbox mirrors. The new repository CI is intended to close the supported Python 3.12/Ruff/mypy/full-test confirmation.
 
 ---
 
@@ -228,8 +236,8 @@ Make local scratch and S3-compatible durable storage interchangeable and reliabl
 ### Storage abstraction
 
 - [x] Local backend.
-- [ ] S3-compatible backend suitable for GMI Cold Storage. — **BLOCKED** pending real S3/GMI endpoint validation.
-- [ ] Optional external S3-compatible staging backend. — **BLOCKED** pending real external endpoint validation.
+- [ ] S3-compatible backend suitable for GMI Cold Storage. — **IMPLEMENTED, BLOCKED on real GMI endpoint validation.**
+- [ ] Optional external S3-compatible staging backend. — **IMPLEMENTED generically, BLOCKED on selected provider validation.**
 - [x] Operations:
   - [x] list;
   - [x] exists;
@@ -246,41 +254,41 @@ Make local scratch and S3-compatible durable storage interchangeable and reliabl
 
 ### Artifact manifests
 
-- [ ] Define manifest schema containing at least:
-  - [ ] path/key;
-  - [ ] size;
-  - [ ] checksum;
-  - [ ] schema/version;
-  - [ ] creation time;
-  - [ ] producer Git SHA/config hash where relevant.
-- [ ] Implement BLAKE3 or SHA-256 generation.
-- [ ] Implement manifest verification command.
+- [x] Define manifest schema containing at least:
+  - [x] path/key;
+  - [x] size;
+  - [x] checksum;
+  - [x] schema/version;
+  - [x] creation time;
+  - [x] producer Git SHA/config hash where relevant.
+- [x] Implement SHA-256 generation.
+- [x] Implement manifest verification command.
 
 ### Bulk transfer
 
-- [ ] Integrate `rclone`, `s5cmd`, or equivalent for large transfer jobs.
-- [ ] Support resumable transfer.
-- [ ] Record throughput statistics.
+- [x] Integrate `rclone`, `s5cmd`, or equivalent for large transfer jobs. — backend-native resumable implementation is the current equivalent path.
+- [x] Support resumable transfer.
+- [x] Record throughput statistics.
 
 ## Tests
 
 - [x] Local backend unit tests.
-- [ ] **BLOCKED** — S3 integration tests against a test bucket or S3-compatible local emulator.
-- [ ] Interrupted upload recovery test.
+- [ ] **BLOCKED** — real S3 integration test harness exists but needs a real GMI/test S3 endpoint and credentials.
+- [x] Interrupted upload recovery/resume test.
 - [x] Checksum mismatch detection test.
-- [ ] Manifest verification test.
+- [x] Manifest verification test.
 
-### Progress note — 2026-08-18
+### Progress note — 2026-08-20
 
-- Completed: common storage protocol, atomic local backend, S3-compatible implementation, all required storage operations, retry/backoff, transfer timeouts, temporary-key publication, automatic/explicit multipart upload, checksum verification, and config-to-backend construction.
-- Verified by: dedicated sandbox venv storage suite passes (`17 passed`); `compileall` and the repository 100-character line-length check pass; Git blob hashes match the tested files exactly.
-- S3 unit coverage includes retry after partial upload-stream consumption, multipart cleanup/fallback, separate durable/staging namespaces, checksum mismatch detection, and real boto3 timeout configuration without network I/O.
-- **BLOCKED — provider integration:** the sandbox has no reachable S3-compatible bucket/emulator or GMI Cold Storage credentials, so GMI/external-provider compatibility remains unconfirmed and those provider-specific checkboxes are intentionally left unchecked.
-- Next section: Artifact manifests. The provider-integration blocker does not prevent local implementation/testing of that section.
+- Completed: common storage protocol, atomic local backend, generic S3-compatible backend, required storage operations, retry/backoff, transfer timeouts, temporary publication, multipart upload, checksum verification, artifact manifests, manifest verification CLI, resumable bulk transfer, journals, and throughput statistics.
+- Real-provider harness: `tests/integration/test_phase2_s3_provider_gate.py` remains opt-in and fail-safe.
+- Provider-specific acceptance is intentionally unchecked until the harness succeeds against GMI Cold Storage and any selected staging provider.
 
 ## Gate
 
 A generated test artifact can be written locally, uploaded, deleted locally, restored, checksum-verified, and identified by manifest without manual steps.
+
+**LOCAL FUNCTIONAL GATE PASSED. PRODUCTION PHASE BLOCKED — provider integration only.**
 
 ---
 
@@ -307,119 +315,148 @@ The intended stage boundary is:
 09 packed training data
 ```
 
-Each stage must be restartable and should write a manifest plus success marker only after successful completion.
+- [x] Explicit stage identities exist for `00_raw` through `09_packed_training_data`.
+- [x] Stages can publish one or more immutable artifacts through a common restartable runner.
+- [x] Success markers publish only after artifacts/manifests/checksums/lineage verify.
+- [x] Completed stages fail closed when success metadata or referenced artifacts are corrupt.
 
 ## Vendor acquisition
 
-- [ ] Define vendor adapter interface.
-- [ ] Implement chosen broad-equities vendor adapter once subscription is finalized.
-- [ ] Implement targeted Databento or equivalent execution-data adapter if selected.
-- [ ] Rate-limit and retry downloads safely.
-- [ ] Preserve raw vendor data unchanged where licensing permits.
-- [ ] Record exact query/request parameters and download dates.
+- [x] Define provider-independent vendor adapter interface.
+- [ ] Implement chosen broad-equities vendor adapter once subscription is finalized. — **BLOCKED on vendor/API selection.**
+- [ ] Implement targeted Databento or equivalent execution-data adapter if selected. — **BLOCKED on provider selection/credentials.**
+- [x] Rate-limit and retry downloads safely.
+- [x] Preserve raw vendor data unchanged where licensing permits.
+- [x] Record exact non-secret query/request parameters and download dates.
+- [x] Reject secret-like request/response metadata from durable audit records.
+- [x] Provide provider-neutral HTTPS GET transport with runtime-only credential injection.
 
 ## Raw validation
 
-- [ ] Validate timestamps/time zones.
-- [ ] Detect duplicate rows/events.
-- [ ] Detect impossible OHLC relationships.
-- [ ] Validate volumes/prices for obvious corruption.
-- [ ] Detect unexpected missing sessions/intervals.
-- [ ] Record rather than silently repair anomalies unless repair behavior is explicitly defined.
+- [x] Validate timestamps/time zones.
+- [x] Detect duplicate rows/events.
+- [x] Detect impossible OHLC relationships.
+- [x] Validate volumes/prices/VWAP for obvious corruption.
+- [x] Detect unexpected missing sessions/intervals.
+- [x] Detect assets with zero rows when expected assets/sessions are supplied.
+- [x] Record rather than silently repair anomalies.
 
 ## Security master
 
-- [ ] Permanent/security identifier mapping.
-- [ ] Ticker changes.
-- [ ] Listing/delisting dates.
-- [ ] Security type classification.
-- [ ] Exchange metadata.
-- [ ] Corporate actions.
+- [x] Permanent/security identifier mapping.
+- [x] Ticker changes.
+- [x] Listing/delisting dates.
+- [x] Security type classification.
+- [x] Exchange metadata.
+- [x] Corporate actions.
+- [x] Guards against ticker reuse splicing unrelated securities.
+- [x] Point-in-time symbol lookup.
 
 ## Adjustment/canonicalization
 
-- [ ] Preserve raw prices.
-- [ ] Generate explicit adjustment factors/adjusted series where needed.
-- [ ] Handle splits.
-- [ ] Handle dividends according to documented return convention.
-- [ ] Handle corporate-action boundaries causally.
+- [x] Preserve raw prices.
+- [x] Generate explicit adjustment factors/adjusted series where needed.
+- [x] Handle splits causally.
+- [x] Handle dividends according to documented return convention.
+- [x] Handle corporate-action boundaries causally.
+- [x] Independently reject malformed/non-finite source data at canonicalization boundary.
 
 ## Resampling
 
-- [ ] Canonical one-minute bars.
-- [ ] 5-minute derived bars.
-- [ ] 15-minute derived bars.
-- [ ] 30-minute derived bars.
-- [ ] Daily aggregates as needed.
-- [ ] Session/calendar-aware behavior.
-- [ ] No cross-session leakage in rolling operations.
+- [x] Canonical one-minute base representation.
+- [x] 5-minute derived bars.
+- [x] 15-minute derived bars.
+- [x] 30-minute derived bars.
+- [x] 60-minute derived bars.
+- [x] Daily aggregates.
+- [x] Session-aware behavior.
+- [x] No cross-session leakage.
+- [x] Production exchange-calendar session resolver supports real holidays and early closes.
+- [x] Non-session bars fail closed when a production exchange-calendar resolver is used.
 
 ## Point-in-time universe
 
-- [ ] Define eligibility filters.
-- [ ] Restrict primary universe to intended U.S. common equities.
-- [ ] Calculate trailing liquidity using information available at that timestamp.
-- [ ] Rank/select approximately 750–1,500 liquid names according to frozen methodology.
-- [ ] Freeze membership at documented cadence.
-- [ ] Include historical delisted securities where eligible.
-- [ ] Save universe membership snapshots.
+- [x] Define eligibility filters in the reference universe policy.
+- [x] Restrict the reference universe path to intended common-equity security types.
+- [x] Calculate trailing liquidity using only information strictly before rebalance time.
+- [ ] Freeze final production ranking/selection cadence and thresholds. — **BLOCKED on frozen production methodology/history.**
+- [x] Include historical delisted securities while historically eligible.
+- [x] Save versioned universe membership snapshots.
 
 ## Feature pipeline
 
-Implement primitives first, then derived features. Required categories:
+Reference causal implementation covers the required categories:
 
-- [ ] raw/normalized OHLC/VWAP information;
-- [ ] returns at multiple horizons;
-- [ ] volume/dollar-volume/relative-volume features;
-- [ ] realized volatility features;
-- [ ] range/ATR-like features;
-- [ ] momentum/trend features;
-- [ ] market-relative features;
-- [ ] sector-relative features;
-- [ ] cross-sectional ranks;
-- [ ] time-of-day/session features;
-- [ ] liquidity features;
-- [ ] market regime inputs;
-- [ ] stock/sector identity metadata suitable for embeddings.
+- [x] raw/normalized OHLC/VWAP information;
+- [x] returns at multiple horizons;
+- [x] volume/dollar-volume/relative-volume features;
+- [x] realized volatility features;
+- [x] range/ATR-like features;
+- [x] momentum/trend features;
+- [x] market-relative features;
+- [x] sector-relative features;
+- [x] cross-sectional ranks;
+- [x] time-of-day/session features;
+- [x] liquidity features;
+- [x] market regime inputs;
+- [x] stock/sector identity metadata suitable for embeddings.
+- [x] Prefix-invariance regression tests protect against future observations changing earlier features.
+- [x] Derived features fail closed on NaN/Inf/overflow.
 
-Feature code must support the same transformations later in live inference.
+Feature code must support the same transformations later in live inference; live parity remains a Phase 19 acceptance item.
 
 ## Labels
 
 Prepare at minimum:
 
-- [ ] 5-minute future return;
-- [ ] 15-minute future return;
-- [ ] 30-minute future return;
-- [ ] 60-minute future return;
-- [ ] future excess return relative to market/reference;
-- [ ] direction labels;
-- [ ] cross-sectional rank targets;
-- [ ] future volatility target;
-- [ ] optional distribution/quantile targets.
+- [x] 5-minute future return;
+- [x] 15-minute future return;
+- [x] 30-minute future return;
+- [x] 60-minute future return;
+- [x] future excess return relative to market/reference;
+- [x] direction labels;
+- [x] cross-sectional rank targets;
+- [x] future volatility target;
+- [x] optional distribution/quantile/rank targets.
+- [x] Missing future endpoints are not interpolated.
+- [x] Non-finite derived labels fail closed.
 
 Primary model research remains centered on 15m/30m medium-frequency behavior.
 
 ## Splits
 
-- [ ] Define chronological walk-forward folds.
-- [ ] Define training periods.
-- [ ] Define validation periods.
-- [ ] Define immutable final holdout.
-- [ ] Persist split IDs independently of model code.
-- [ ] Add guard preventing routine campaign code from loading final holdout.
+- [x] Define chronological walk-forward fold schema.
+- [x] Define training periods structurally.
+- [x] Define validation periods structurally.
+- [x] Define immutable protected final-holdout structure.
+- [x] Persist split IDs independently of model code.
+- [x] Add default-deny guard preventing routine research code from loading final holdout dates.
+- [x] Routine split views physically omit protected holdout dates.
+- [ ] Freeze final production train/validation/holdout dates. — **BLOCKED on finalized data period.**
 
 ## Packing
 
-- [ ] Research representation: Parquet + compression.
-- [ ] Training representation optimized for sequential/batched reads.
-- [ ] Preserve asset IDs and timestamps with every sample/prediction target.
-- [ ] Support memory mapping or equivalent if appropriate.
-- [ ] Implement loader throughput benchmark.
+- [ ] Research representation: Parquet + Zstd. — **BLOCKED until the production columnar dependency/format path is validated.**
+- [x] Deterministic NumPy `.npy` memory-mapped reference training representation.
+- [x] Preserve asset IDs and exact timestamps with every sample/prediction target.
+- [x] Support memory mapping.
+- [x] Implement loader throughput benchmark.
+- [x] Verify array file sizes/checksums before opening a pack.
+- [x] Persist and verify a SHA-256 sidecar for semantic pack metadata so dataset/split/feature metadata tampering is detected.
+- [ ] Freeze final H200 loader representation after representative target-hardware benchmarking.
+
+### Progress note — 2026-08-20
+
+- The Phase 3 checklist is now reconciled with the implemented reference pipeline and the detailed `docs/progress/phase_03.md` record.
+- New hardening: production `exchange_calendars` support resolves actual XNYS holidays and early closes and can drive per-date resampling session lengths.
+- New hardening: packed dataset metadata now has an independently verified SHA-256 sidecar; loader validation is stricter for metadata dimensions, names, file records, dtypes, and checksums.
+- Remaining blockers are external or production-freeze items: concrete vendor adapters/credentials, final universe methodology, final split dates, Parquet/Zstd production representation, and H200 loader benchmarking.
 
 ## Gate
 
 A small multi-year/multi-asset sample can run raw → packed end-to-end twice and produce equivalent manifests/data within the expected deterministic tolerance. Leakage/security/universe tests pass.
+
+**REFERENCE/SYNTHETIC GATE PASSED IN PRIOR SANDBOX AUDITS. PRODUCTION PHASE BLOCKED on the external/finalization items above.**
 
 ---
 
@@ -431,29 +468,40 @@ Make data leakage difficult to introduce accidentally.
 
 ## Implement tests/invariants
 
-- [ ] No feature uses observations after decision timestamp.
-- [ ] No label data enters feature pipeline.
-- [ ] Universe membership uses only historical information.
-- [ ] Corporate-action processing obeys point-in-time semantics.
-- [ ] Train/validation chronology is preserved.
-- [ ] Final holdout is inaccessible in normal search mode.
-- [ ] Session boundaries are respected.
-- [ ] Resampling does not use future bar information.
-- [ ] Missing-data behavior is documented and tested.
-- [ ] Asset/ticker changes do not splice unrelated securities together.
+- [x] No feature uses observations after decision timestamp.
+- [x] No label data enters feature pipeline.
+- [x] Universe membership uses only historical information.
+- [x] Corporate-action processing obeys point-in-time semantics.
+- [x] Train/validation chronology is preserved.
+- [x] Final holdout is inaccessible in normal search mode and omitted from routine views.
+- [x] Session boundaries are respected.
+- [x] Resampling does not use future bar information.
+- [x] Missing-data behavior is documented and tested.
+- [x] Asset/ticker changes do not splice unrelated securities together.
+- [x] Future cross-sectional panel additions cannot alter earlier feature rows.
+- [x] Exchange holidays/early closes can be sourced from the production calendar dependency.
 
 ## Audits
 
-- [ ] Generate dataset summary report.
-- [ ] Missingness statistics.
-- [ ] Asset counts through time.
-- [ ] Universe turnover statistics.
-- [ ] Return/volume sanity distributions.
-- [ ] Split date visualization/report.
+- [x] Generate dataset summary report.
+- [x] Missingness and malformed-observation statistics.
+- [x] Asset counts through time.
+- [x] Universe turnover statistics.
+- [x] Return/volume sanity distributions with overflow/non-finite handling.
+- [x] Split timeline/report without exposing final-holdout dates to routine workflows.
+- [x] Deterministic canonical JSON and human-readable Markdown report output.
+
+### Progress note — 2026-08-20
+
+- The Phase 4 checklist is reconciled with the implemented leakage/audit suite and `docs/progress/phase_04.md`.
+- The production calendar dependency gap is now addressed in code for XNYS-style session/early-close validation; it still needs to be exercised on the finalized provider-derived production dataset.
+- The production Phase 4 gate remains blocked because the final provider dataset, frozen universe/split definitions, and final columnar representation do not yet exist.
 
 ## Gate
 
-No architecture work should proceed on the full dataset until the leakage/data-contract suite passes.
+No architecture work should proceed on the full production dataset until the leakage/data-contract suite passes on that exact frozen dataset and representation.
+
+**REFERENCE/SYNTHETIC LEAKAGE AND AUDIT GATES ARE IMPLEMENTED. PRODUCTION PHASE BLOCKED — finalized production-data validation only.**
 
 ---
 
@@ -1380,33 +1428,35 @@ These apply throughout implementation.
 
 Every material run should record:
 
-- [ ] Git SHA;
-- [ ] container image digest;
-- [ ] Python version;
-- [ ] PyTorch/CUDA/Triton versions where relevant;
-- [ ] GPU/CPU hardware summary;
-- [ ] dataset version/hash;
-- [ ] split ID;
-- [ ] config hash;
-- [ ] seed;
-- [ ] precision/compile mode.
+- [x] Git SHA support in run manifests.
+- [ ] container image digest — capture support exists but production image digest gate remains later.
+- [x] Python version support in run manifests.
+- [ ] PyTorch/CUDA/Triton versions where relevant — capture hooks exist; GPU stack not yet validated.
+- [x] GPU/CPU hardware/runtime summary support where available.
+- [x] dataset version/hash lineage support.
+- [x] split ID lineage support.
+- [x] config hash.
+- [x] seed.
+- [x] precision/compile mode.
 
 ## Security
 
-- [ ] No secrets committed.
-- [ ] `.env` excluded.
-- [ ] Vendor/broker/storage/Discord/AI keys injected at runtime.
-- [ ] AI debugging context sanitized.
-- [ ] Licensed market data not sent to external AI APIs unnecessarily.
-- [ ] Production broker credentials isolated from research containers where practical.
+- [x] No secrets committed by project policy/tests.
+- [x] `.env` excluded.
+- [x] Vendor/storage/Discord/AI keys designed for runtime injection.
+- [ ] Broker credential runtime integration — broker layer not implemented yet.
+- [ ] AI debugging context sanitizer — Phase 12.
+- [x] Vendor acquisition rejects secret-like durable request/response metadata.
+- [ ] Licensed market data external-AI redaction gate — Phase 12.
+- [ ] Production broker credentials isolated from research containers — Phase 14/19.
 
 ## Versioning
 
-- [ ] Dataset versions immutable.
-- [ ] Campaign configs immutable once campaign starts.
-- [ ] Trial configs immutable.
-- [ ] Behavior-changing bug fix creates a new child trial/version.
-- [ ] AI-generated patches are committed/audited before being treated as valid experiment code.
+- [x] Dataset/stage artifact versioning primitives are immutable/content-addressed.
+- [ ] Campaign configs immutable once campaign starts — enforcement belongs to Phase 10/11.
+- [ ] Trial configs immutable — enforcement belongs to Phase 5/11.
+- [ ] Behavior-changing bug fix creates a new child trial/version — scheduler enforcement not yet implemented.
+- [ ] AI-generated patches are committed/audited before being treated as valid experiment code — Phase 12.
 
 ## Performance discipline
 
@@ -1414,7 +1464,7 @@ Every material run should record:
 - [ ] Keep H200 training input local/hot whenever practical.
 - [ ] CPU evaluation/storage operations must not unnecessarily idle the GPU.
 - [ ] Store promoted/final predictions to permit CPU-only reevaluation.
-- [ ] Record throughput so unexpected regressions are visible.
+- [x] Reference packed loader records throughput.
 
 ---
 
@@ -1435,29 +1485,31 @@ Do not allow these to distract from the critical path unless the plan is explici
 
 # 26. Immediate next implementation sequence
 
-When coding begins, the recommended first commits are:
+Current recommended sequence, reconciled to implemented work:
 
-1. [ ] `pyproject.toml`, dependency lock, package skeleton, lint/test configuration.
+1. [x] `pyproject.toml`, package skeleton, lint/test/type configuration.
 2. [x] Validated configuration schemas and run-manifest utilities.
-3. [ ] Local + S3 storage abstraction and checksum manifests.
-4. [ ] Data vendor interface plus small-sample downloader.
-5. [ ] Raw validation/security-master/resampling pipeline.
-6. [ ] Point-in-time universe + feature/label/split pipeline.
-7. [ ] Dataset leakage test suite and packer/loader benchmark.
-8. [ ] Common model/trainer/checkpoint/prediction interfaces.
-9. [ ] Canonical evaluator and metric unit tests.
-10. [ ] Simple baseline models and an end-to-end research smoke test.
-11. [ ] Advanced/core model families.
-12. [ ] Custom Market Mixer/reference custom operators.
-13. [ ] Campaign scheduler/state DB/fault handling.
-14. [ ] Discord/telemetry/sync services.
-15. [ ] AI repair sandbox.
-16. [ ] CPU/GPU Docker images and Compose orchestration.
-17. [ ] Scheduler simulation and full fault-injection dress rehearsal.
-18. [ ] Full production data build/staging.
-19. [ ] H200 campaign.
+3. [x] Local + generic S3 storage abstraction, artifact manifests, and resumable transfer.
+4. [x] Provider-independent data vendor interface and provider-neutral downloader transport.
+5. [x] Raw validation/security-master/canonicalization/resampling reference pipeline.
+6. [x] Point-in-time universe + feature/label/split reference pipeline.
+7. [x] Dataset leakage/audit suite and deterministic reference packer/loader benchmark.
+8. [x] Add supported-Python CPU CI and close high-value foundation integrity gaps.
+9. [ ] Commit/freeze a dependency lock strategy for reproducible CPU verification.
+10. [ ] Common model/trainer/checkpoint/prediction interfaces.
+11. [ ] Canonical evaluator and metric unit tests.
+12. [ ] Simple baseline models and an end-to-end research smoke test.
+13. [ ] Advanced/core model families.
+14. [ ] Custom Market Mixer/reference custom operators.
+15. [ ] Campaign scheduler/state DB/fault handling.
+16. [ ] Discord/telemetry/sync services.
+17. [ ] AI repair sandbox.
+18. [ ] CPU/GPU Docker images and Compose orchestration.
+19. [ ] Scheduler simulation and full fault-injection dress rehearsal.
+20. [ ] Full production data build/staging.
+21. [ ] H200 campaign.
 
-This ordering intentionally gets **correctness, data integrity, evaluation, and recovery** working before performance experimentation.
+External Phase 2/3/4 production blockers should be closed as credentials/data/hardware become available, but they do not prevent CPU/reference implementation of the common training/evaluation framework.
 
 ---
 
@@ -1466,8 +1518,8 @@ This ordering intentionally gets **correctness, data integrity, evaluation, and 
 The H200 should not be rented for the real campaign until all of the following can be checked:
 
 - [ ] Full dataset is built and immutable.
-- [ ] Final holdout is protected.
-- [ ] Data leakage tests pass.
+- [x] Final-holdout access primitives are protected; final production dates still need freezing.
+- [x] Leakage regression suite exists; it must still pass the finalized production dataset.
 - [ ] Packed loader feeds the GPU efficiently on rehearsal hardware.
 - [ ] All core architecture families can train with common interfaces.
 - [ ] Custom architectures have reference correctness tests.

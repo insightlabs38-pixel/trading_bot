@@ -21,6 +21,11 @@ class PackingError(RuntimeError):
     """Raised when packed dataset inputs or integrity checks fail."""
 
 
+_METADATA_FILE = "metadata.json"
+_METADATA_SHA256_FILE = "metadata.sha256"
+_ARRAY_FILES = ("features.npy", "targets.npy", "timestamps_ns.npy", "asset_ids.npy")
+
+
 @dataclass(frozen=True, slots=True)
 class TrainingSample:
     security_id: str
@@ -74,9 +79,11 @@ class PackedDataset:
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
+        metadata_bytes = _read_verified_metadata(self.path)
+        self.dataset_sha256 = hashlib.sha256(metadata_bytes).hexdigest()
         try:
-            self.metadata = json.loads((self.path / "metadata.json").read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            self.metadata = json.loads(metadata_bytes)
+        except (UnicodeError, json.JSONDecodeError) as exc:
             raise PackingError(f"invalid packed dataset metadata: {exc}") from exc
         _validate_metadata(self.metadata)
         _verify_files(self.path, self.metadata["files"])
@@ -150,10 +157,7 @@ def pack_training_data(
     )
     try:
         _write_arrays(temporary, ordered, feature_count, target_count)
-        files = {
-            name: _file_record(temporary / name)
-            for name in ("features.npy", "targets.npy", "timestamps_ns.npy", "asset_ids.npy")
-        }
+        files = {name: _file_record(temporary / name) for name in _ARRAY_FILES}
         metadata = {
             "schema_version": 1,
             "format": "numpy_npy_memmap_reference",
@@ -172,8 +176,12 @@ def pack_training_data(
             separators=(",", ":"),
             ensure_ascii=False,
         ).encode("utf-8")
-        (temporary / "metadata.json").write_bytes(metadata_bytes)
-        dataset_sha = hashlib.sha256(metadata_bytes).hexdigest()
+        metadata_sha = hashlib.sha256(metadata_bytes).hexdigest()
+        (temporary / _METADATA_FILE).write_bytes(metadata_bytes)
+        (temporary / _METADATA_SHA256_FILE).write_text(
+            f"{metadata_sha}\n",
+            encoding="ascii",
+        )
         if destination.exists():
             shutil.rmtree(destination)
         os.replace(temporary, destination)
@@ -181,7 +189,7 @@ def pack_training_data(
     finally:
         if temporary is not None and temporary.exists():
             shutil.rmtree(temporary, ignore_errors=True)
-    return PackingResult(destination, len(ordered), feature_count, target_count, dataset_sha)
+    return PackingResult(destination, len(ordered), feature_count, target_count, metadata_sha)
 
 
 def benchmark_loader(dataset: PackedDataset, *, batch_size: int = 1024) -> LoaderBenchmark:
@@ -199,6 +207,21 @@ def benchmark_loader(dataset: PackedDataset, *, batch_size: int = 1024) -> Loade
     if not np.isfinite(checksum):
         raise PackingError("loader benchmark encountered non-finite data")
     return LoaderBenchmark(count, bytes_read, max(0.0, time.perf_counter() - start))
+
+
+def _read_verified_metadata(path: Path) -> bytes:
+    metadata_path = path / _METADATA_FILE
+    checksum_path = path / _METADATA_SHA256_FILE
+    try:
+        metadata_bytes = metadata_path.read_bytes()
+        expected = checksum_path.read_text(encoding="ascii").strip().lower()
+    except (OSError, UnicodeError) as exc:
+        raise PackingError(f"invalid packed dataset metadata integrity files: {exc}") from exc
+    _require_sha256(expected, field_name=_METADATA_SHA256_FILE)
+    actual = hashlib.sha256(metadata_bytes).hexdigest()
+    if actual != expected:
+        raise PackingError("packed dataset metadata checksum mismatch")
+    return metadata_bytes
 
 
 def _validate_float32_representable(rows: tuple[TrainingSample, ...]) -> None:
@@ -240,9 +263,7 @@ def _write_arrays(
 def _timestamp_to_ns(value: datetime) -> int:
     epoch = datetime(1970, 1, 1, tzinfo=UTC)
     delta = value.astimezone(UTC) - epoch
-    microseconds = (
-        (delta.days * 86_400 + delta.seconds) * 1_000_000 + delta.microseconds
-    )
+    microseconds = (delta.days * 86_400 + delta.seconds) * 1_000_000 + delta.microseconds
     nanoseconds = microseconds * 1_000
     limits = np.iinfo(np.int64)
     if not limits.min <= nanoseconds <= limits.max:
@@ -257,14 +278,34 @@ def _validate_metadata(metadata: object) -> None:
         raise PackingError("unsupported packed dataset schema version")
     if metadata.get("format") != "numpy_npy_memmap_reference":
         raise PackingError("unsupported packed dataset format")
-    required_files = {"features.npy", "targets.npy", "timestamps_ns.npy", "asset_ids.npy"}
-    records = metadata.get("files")
-    if not isinstance(records, dict) or set(records) != required_files:
-        raise PackingError("packed dataset metadata must describe all required array files")
+
+    for key in ("dataset_version", "split_version"):
+        value = metadata.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise PackingError(f"packed dataset metadata field {key} must be a non-blank string")
+
     for key in ("sample_count", "feature_count", "target_count"):
         value = metadata.get(key)
-        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-            raise PackingError(f"packed dataset metadata field {key} must be a non-negative integer")
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise PackingError(f"packed dataset metadata field {key} must be a positive integer")
+
+    feature_count = int(metadata["feature_count"])
+    target_count = int(metadata["target_count"])
+    _validate_names(metadata.get("feature_names"), feature_count, field_name="feature_names")
+    _validate_names(metadata.get("target_names"), target_count, field_name="target_names")
+
+    records = metadata.get("files")
+    if not isinstance(records, dict) or set(records) != set(_ARRAY_FILES):
+        raise PackingError("packed dataset metadata must describe all required array files")
+
+
+def _validate_names(value: object, expected_count: int, *, field_name: str) -> None:
+    if not isinstance(value, list) or len(value) != expected_count:
+        raise PackingError(f"packed dataset metadata {field_name} width does not match metadata")
+    if any(not isinstance(item, str) or not item.strip() for item in value):
+        raise PackingError(f"packed dataset metadata {field_name} must contain non-blank strings")
+    if len(set(value)) != len(value):
+        raise PackingError(f"packed dataset metadata {field_name} must be unique")
 
 
 def _validate_array_shapes(dataset: PackedDataset) -> None:
@@ -283,6 +324,8 @@ def _validate_array_shapes(dataset: PackedDataset) -> None:
         raise PackingError("feature and target arrays must use float32")
     if dataset.timestamps_ns.dtype != np.int64:
         raise PackingError("timestamp array must use int64 nanoseconds")
+    if dataset.asset_ids.dtype.kind != "U":
+        raise PackingError("asset ID array must use a fixed-width Unicode dtype")
 
 
 def _file_record(path: Path) -> dict[str, int | str]:
@@ -291,15 +334,29 @@ def _file_record(path: Path) -> dict[str, int | str]:
 
 def _verify_files(path: Path, records: dict[str, dict[str, int | str]]) -> None:
     for name, record in records.items():
-        if not isinstance(record, dict) or "size" not in record or "sha256" not in record:
+        if not isinstance(record, dict):
             raise PackingError(f"invalid packed file metadata: {name}")
+        size = record.get("size")
+        sha256 = record.get("sha256")
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            raise PackingError(f"invalid packed file size metadata: {name}")
+        if not isinstance(sha256, str):
+            raise PackingError(f"invalid packed file checksum metadata: {name}")
+        _require_sha256(sha256, field_name=f"{name}.sha256")
+
         file_path = path / name
         if not file_path.is_file():
             raise PackingError(f"packed file missing: {name}")
-        if file_path.stat().st_size != int(record["size"]):
+        if file_path.stat().st_size != size:
             raise PackingError(f"packed file size mismatch: {name}")
-        if _sha256_file(file_path) != str(record["sha256"]):
+        if _sha256_file(file_path) != sha256:
             raise PackingError(f"packed file checksum mismatch: {name}")
+
+
+def _require_sha256(value: str, *, field_name: str) -> None:
+    normalized = value.lower()
+    if len(normalized) != 64 or any(char not in "0123456789abcdef" for char in normalized):
+        raise PackingError(f"{field_name} must be a 64-character hexadecimal SHA-256")
 
 
 def _sha256_file(path: Path) -> str:

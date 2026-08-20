@@ -23,6 +23,7 @@ cpu = [
     "blake3>=1.0,<2",
     "boto3>=1.40,<2",
     "duckdb>=1.3,<2",
+    "exchange-calendars>=4.13,<5",
     "numba>=0.61,<1",
     "numpy>=2.1,<2.3",
     "polars>=1.32,<2",

@@ -209,3 +209,13 @@ def fsync_file(path: Path) -> None:
     """Flush file contents before an atomic local rename publishes them."""
     with path.open("rb") as handle:
         os.fsync(handle.fileno())
+
+
+def fsync_directory(path: Path) -> None:
+    """Flush directory metadata after rename/unlink so publication survives a crash."""
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
