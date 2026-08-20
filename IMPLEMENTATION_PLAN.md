@@ -576,7 +576,7 @@ Also implement:
 - Predictions: evaluator-independent immutable Parquet + Zstd artifacts preserve exact asset/timestamp/target/prediction lineage and fail closed on tampering.
 - Gate models: affine linear, nonlinear GELU/dropout MLP, and residual gated mixer models all train, checkpoint, reconstruct, resume, predict, and pass a trainer-independent saved-artifact MSE evaluation smoke through the same framework.
 - Dependency isolation: the `training-cpu` group uses the official CPU-only PyTorch index for CPU CI while the production `gpu` group remains PyTorch-free so the pinned NGC image retains ownership of the CUDA stack.
-- Supported environment: Python 3.12 CI resolved PyTorch 2.13.0+cpu and passed Ruff, format, strict mypy, compileall, and 252 tests with only the opt-in Phase 2 real-S3 provider gate skipped before final tracker reconciliation.
+- Supported environment: the reconciled read-only Python 3.12 PR head resolved PyTorch 2.13.0+cpu, passed lock freshness, Ruff, format, strict mypy across 41 source files, compileall, and 252 tests with only the opt-in Phase 2 real-S3 provider gate skipped.
 - Detailed status and remaining GPU-only acceptance items are recorded in `docs/progress/phase_05.md`.
 
 ## Gate

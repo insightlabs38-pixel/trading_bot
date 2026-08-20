@@ -113,8 +113,9 @@ The single skipped test is still the opt-in real S3 provider gate from Phase 2. 
 including BF16 CPU autocast, exact checkpoint continuation, the three-model gate, and Parquet
 prediction artifacts, all executed in that run.
 
-A final CI run is required after this progress/tracker reconciliation and the telemetry-contract
-addition; it must remain green before this branch is considered ready for merge.
+The reconciled read-only PR head passed the permanent Python 3.12 CPU gate: lock freshness,
+Ruff, formatting, strict mypy across 41 source files, compileall, and **252 passed, 1 skipped**.
+The single skip remains the opt-in Phase 2 real-S3 provider test.
 
 ## Remaining Phase 5 blockers
 
