@@ -49,9 +49,7 @@ class TrainingBatch:
             raise ValueError("training batches must contain at least one target")
         for name, target in self.targets.items():
             if not name.strip() or target.ndim == 0 or int(target.shape[0]) != batch_size:
-                raise ValueError(
-                    "every target must be named and share the feature batch dimension"
-                )
+                raise ValueError("every target must be named and share the feature batch dimension")
 
     @property
     def batch_size(self) -> int:
