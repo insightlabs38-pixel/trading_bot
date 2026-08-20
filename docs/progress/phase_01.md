@@ -2,7 +2,7 @@
 
 Last updated: **2026-08-20**
 
-Status: **IN PROGRESS — target-environment CI verification**
+Status: **BLOCKED — GitHub hosted-runner startup / target-environment verification**
 
 This file records validation detail for Phase 1. The authoritative task list remains
 `IMPLEMENTATION_PLAN.md`.
@@ -24,7 +24,8 @@ This file records validation detail for Phase 1. The authoritative task list rem
 - [x] `src/trading_bot` package initialization is present.
 - [x] CPU-only GitHub Actions verification is installed on `main`.
 - [x] CI uses only one standard `ubuntu-latest` hosted runner with no GPU/larger-runner dependency.
-- [x] CI installs Python 3.12 and runs the CPU dependency group.
+- [x] CI avoids third-party actions and can run as a pure-shell job using the ephemeral read-only
+  `GITHUB_TOKEN`, system Python 3.12, and a temporary pinned `uv` bootstrap environment.
 - [x] `scripts/verify_cpu.sh` provides the same Ruff/format/mypy/compileall/pytest gate locally.
 - [ ] A green target-environment CI run is required before the Phase 1 gate is declared passed.
 - [ ] A committed dependency lock remains a reproducibility improvement to finalize separately.
@@ -32,6 +33,25 @@ This file records validation detail for Phase 1. The authoritative task list rem
 The original sandbox limitation is no longer the only path to target-environment verification:
 `.github/workflows/cpu-ci.yml` now provides a repository-native Python 3.12 gate. The workflow has a
 20-minute timeout and cancels superseded runs to conserve standard hosted-runner minutes.
+
+### Hosted-runner verification blocker — 2026-08-20
+
+The repository workflow is registered and pull-request runs are being created. Multiple startup
+variants were exercised to separate workflow/code errors from GitHub runner-policy errors:
+
+1. third-party `setup-uv` action;
+2. GitHub-owned `setup-python` plus direct `uv` installation;
+3. pure-shell job with no `uses:` actions at all.
+
+The pure-shell run progressed to the GitHub queue and then terminated with `failure` before GitHub
+recorded any workflow step or downloadable job log. Because the no-action workflow never reached
+its first shell command, this is not evidence of a Ruff/mypy/pytest failure. It is an external
+hosted-runner startup/entitlement condition (for example repository/account Actions policy,
+included-minute availability, or spending/billing state) that cannot be changed through the
+available repository connector.
+
+Until a standard hosted runner actually starts, the Python 3.12 gate remains **BLOCKED** and no
+claim of full target-environment verification is made.
 
 ## Configuration system
 
@@ -109,13 +129,13 @@ changed Python files contained no lines longer than the repository's configured 
 limit.
 
 That prior result remains useful regression evidence but is not the supported-runtime gate because
-it used Python 3.13. The repository-native CI now supplies the missing Python 3.12/Ruff/mypy/full-
-test verification path.
+it used Python 3.13. The repository-native CI supplies the intended Python 3.12/Ruff/mypy/full-test
+verification path once GitHub assigns the standard hosted runner.
 
 ## Gate
 
 A minimal command can load a validated configuration, generate a run manifest, and exit successfully
 on any supported machine without requiring market data or a GPU.
 
-**IN PROGRESS — target-environment CI verification.** Declare Phase 1 passed only after the new
-Python 3.12 CPU CI run is green.
+**BLOCKED — hosted-runner startup / target-environment verification.** Declare Phase 1 passed only
+after the Python 3.12 CPU CI job actually starts and finishes green.
