@@ -72,10 +72,10 @@ Permanent read-only GitHub Actions on Python **3.12.3** with the committed depen
 ```text
 uv lock --check: pass
 Ruff: pass
-Formatting: 97 files formatted
+Formatting: 98 files formatted
 mypy: success, no issues in 50 source files
 compileall: pass
-pytest: 263 passed, 1 skipped in 11.28s
+pytest: 263 passed, 1 skipped
 ```
 
 The single skipped test is the existing opt-in Phase 2 real-S3 provider gate. The Phase 6 saved-Parquet and fresh-process evaluator gates execute in this environment with PyArrow available.
