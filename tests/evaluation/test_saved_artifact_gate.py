@@ -193,8 +193,7 @@ def test_saved_predictions_reproduce_complete_cpu_leaderboard_without_training_i
         "f2": [0.009, 0.007, 0.013, 0.010],
     }
     family_returns = [
-        [0.010 + row * 0.0001, 0.003 - row * 0.0001, -0.002 + row * 0.00005]
-        for row in range(8)
+        [0.010 + row * 0.0001, 0.003 - row * 0.0001, -0.002 + row * 0.00005] for row in range(8)
     ]
     factors = [
         FactorObservation(
