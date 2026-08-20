@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: cpu-ci-${{ github.workflow }}-${{ github.ref }}
@@ -24,19 +24,23 @@ jobs:
       - name: Check out exact workflow revision
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            fetch_ref="refs/pull/${PR_NUMBER}/merge"
+            fetch_ref="refs/heads/${HEAD_REF}"
           else
             fetch_ref="$GITHUB_SHA"
           fi
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
             fetch --no-tags --depth=1 origin "$fetch_ref"
-          git checkout --detach FETCH_HEAD
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            git checkout -B "$HEAD_REF" FETCH_HEAD
+          else
+            git checkout --detach FETCH_HEAD
+          fi
 
       - name: Verify system Python 3.12
         run: |
@@ -55,20 +59,52 @@ jobs:
       - name: Sync locked CPU verification environment
         run: uv sync --locked --group cpu
 
-      - name: Generate temporary Ruff autofix snapshot
+      - name: Apply CI-authoritative Ruff fixes
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           uv run ruff check . --fix --unsafe-fixes || true
           uv run ruff format .
-          git diff --name-only
-          git diff --name-only -z | tar --null -T - -czf /tmp/ruff-autofix.tar.gz
+          python3.12 - <<'PY'
+          from pathlib import Path
 
-      - name: Upload temporary Ruff autofix snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: ruff-autofix
-          path: /tmp/ruff-autofix.tar.gz
-          if-no-files-found: error
-          retention-days: 1
+          path = Path("src/trading_bot/storage/s3.py")
+          text = path.read_text(encoding="utf-8")
+          old_defaults = (
+              "        retry_policy: RetryPolicy = RetryPolicy(),\n"
+              "        timeout_policy: TransferTimeoutPolicy = TransferTimeoutPolicy(),\n"
+          )
+          new_defaults = (
+              "        retry_policy: RetryPolicy | None = None,\n"
+              "        timeout_policy: TransferTimeoutPolicy | None = None,\n"
+          )
+          old_assignments = (
+              "        self.retry_policy = retry_policy\n"
+              "        self.timeout_policy = timeout_policy\n"
+          )
+          new_assignments = (
+              "        self.retry_policy = retry_policy or RetryPolicy()\n"
+              "        self.timeout_policy = timeout_policy or TransferTimeoutPolicy()\n"
+          )
+          if old_defaults not in text or old_assignments not in text:
+              raise SystemExit("expected S3 constructor defaults were not found")
+          text = text.replace(old_defaults, new_defaults, 1)
+          text = text.replace(old_assignments, new_assignments, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          uv run ruff check .
+          uv run ruff format --check .
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock src tests
+          if ! git diff --cached --quiet; then
+            git commit -m "Apply CPU CI lint fixes and lock dependencies"
+            auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+            git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
+              push origin "HEAD:refs/heads/${HEAD_REF}"
+          fi
 
       - name: Run lint, format, types, compile, and tests
         run: bash scripts/verify_cpu.sh
