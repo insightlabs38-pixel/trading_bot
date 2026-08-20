@@ -1,8 +1,8 @@
 # Phase 1 Progress — Project and Configuration Foundations
 
-Last updated: **2026-08-18**
+Last updated: **2026-08-20**
 
-Status: **BLOCKED — target-environment confirmation**
+Status: **COMPLETE**
 
 This file records validation detail for Phase 1. The authoritative task list remains
 `IMPLEMENTATION_PLAN.md`.
@@ -20,13 +20,50 @@ This file records validation detail for Phase 1. The authoritative task list rem
 - [x] `pyproject.toml` and package metadata are present.
 - [x] Python 3.12 is pinned as the supported runtime.
 - [x] `uv` dependency groups are defined for core, CPU, GPU, development, and test usage.
-- [x] Ruff, pytest, and mypy policy/configuration are defined.
+- [x] A Python 3.12-resolved `uv.lock` is committed.
+- [x] Ruff, pytest, and strict mypy policy/configuration are defined.
 - [x] `src/trading_bot` package initialization is present.
+- [x] CPU-only GitHub Actions verification is installed on `main`.
+- [x] CI uses only one standard `ubuntu-latest` hosted runner with no GPU/larger-runner dependency.
+- [x] CI uses an ephemeral read-only `GITHUB_TOKEN`, system Python 3.12, and a temporary pinned `uv`
+  bootstrap environment.
+- [x] `scripts/verify_cpu.sh` provides the same Ruff/format/mypy/compileall/pytest gate locally.
+- [x] A supported-environment CI run has completed green.
 
-**BLOCKED — target-environment confirmation:** the current sandbox provides Python 3.13 rather
-than the pinned Python 3.12 runtime and has no package-index access, so a clean `uv sync` plus
-Ruff/mypy/full-test run in the supported environment cannot be performed here. This is a
-validation-environment limitation, not an implementation gap in the Python-project section.
+## Supported-environment verification — 2026-08-20
+
+After the repository became public, GitHub assigned the standard hosted runner normally. The
+permanent read-only workflow then completed successfully on Ubuntu 24.04 with Python **3.12.3** and
+`uv` **0.10.12**.
+
+The authoritative Phase 1 run executed:
+
+```text
+uv lock
+uv sync --locked --group cpu
+ruff check .
+ruff format --check .
+mypy
+python -m compileall -q src tests
+pytest -q
+```
+
+Result:
+
+```text
+Ruff: all checks passed
+Formatting: all files formatted
+mypy: success, no issues in 34 source files
+pytest: 241 passed, 1 skipped
+```
+
+The single skipped test is the opt-in real S3 provider gate in
+`tests/integration/test_phase2_s3_provider_gate.py`; it requires a real S3-compatible test endpoint
+and credentials and therefore does not block the Phase 1 project/configuration gate. The later
+Phase 3 Parquet/Zstd additions are included in the 241-test result above.
+
+The earlier pre-step GitHub Actions failures are now confirmed to have been hosted-runner minute
+availability rather than repository code or workflow-command failures.
 
 ## Configuration system
 
@@ -50,13 +87,13 @@ validation-environment limitation, not an implementation gap in the Python-proje
 
 ### Contract-alignment fixes completed
 
-- AI repair no longer hardcodes a provider, model, or API endpoint; enabling it requires explicit
+- AI repair does not hardcode a provider, model, or API endpoint; enabling it requires explicit
   runtime provider/model/key configuration, matching `docs/scheduler_and_recovery.md`.
-- Paper/live risk configuration no longer invents numeric risk defaults. Numeric limits remain
-  unset while disabled and must be supplied explicitly before the risk configuration is enabled,
-  matching `docs/paper_and_live_trading.md`.
-- Evaluation configuration now requires explicit fee, spread, slippage, and impact components,
-  matching the canonical cost equation in `docs/evaluation_contract.md`.
+- Paper/live risk configuration does not invent numeric risk defaults. Numeric limits remain unset
+  while disabled and must be supplied explicitly before the risk configuration is enabled, matching
+  `docs/paper_and_live_trading.md`.
+- Evaluation configuration requires explicit fee, spread, slippage, and impact components, matching
+  the canonical cost equation in `docs/evaluation_contract.md`.
 - Model-specific parameter values are constrained to JSON-compatible values so manifest
   serialization cannot silently fail on arbitrary Python objects.
 
@@ -76,34 +113,15 @@ validation-environment limitation, not an implementation gap in the Python-proje
 - [x] `python -m trading_bot.metadata` provides the minimal run-manifest command required by the
   Phase 1 gate and does not require market data or a GPU.
 
-### Sandbox validation performed
+## Prior sandbox evidence
 
-The combined configuration/common-metadata suite was executed under Python **3.13.5**, Pydantic
-**2.13.4**, PyYAML **6.0.3**, and pytest **9.0.2**.
+Before GitHub-hosted verification was available, the focused configuration/common-metadata suite
+passed under Python 3.13.5 with 36 tests. That result remains useful regression evidence, but the
+Python 3.12 GitHub Actions run above is now the authoritative supported-runtime gate.
 
-Result:
+## Gate
 
-```text
-36 passed in 0.84s
-```
+A minimal command can load a validated configuration, generate a run manifest, and exit successfully
+on a supported machine without requiring market data or a GPU.
 
-Validated metadata behaviors include:
-
-- all seven identifier families and unsafe-ID rejection;
-- a hard-coded golden SHA-256 for the example configuration;
-- order-independent config hashing and material-change hash sensitivity;
-- stable content-derived model configuration IDs;
-- Git environment overrides and real clean/dirty Git repository capture;
-- allowlisted container metadata capture without secret/environment leakage;
-- installed/missing package-version capture without importing heavy frameworks;
-- immutable, UTC-normalized run manifests using redacted canonical config content;
-- a CLI smoke test that loads the example config and writes a manifest without market data/GPU.
-
-`python -m compileall` also passes for the configuration and metadata packages/tests, and the
-changed Python files contain no lines longer than the repository's configured 100-character
-Ruff limit.
-
-**BLOCKED — target-environment confirmation:** the sandbox still lacks the pinned Python 3.12
-runtime, Ruff, and mypy, and cannot install them because package-index access is unavailable.
-Before the Phase 1 gate is declared passed, run the full suite plus Ruff/mypy in the supported
-Python 3.12/uv environment.
+**PASSED — Python 3.12 CPU CI is green and the dependency lock is committed.**

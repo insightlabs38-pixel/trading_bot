@@ -1,12 +1,12 @@
 # Phase 3 Progress — CPU Data Pipeline
 
-Last updated: **2026-08-18**
+Last updated: **2026-08-20**
 
-Status: **BLOCKED — production/provider validation only**
+Status: **BLOCKED — vendor/frozen-methodology/H200 gates only**
 
 This file records validation detail for Phase 3. The authoritative task list remains
-`IMPLEMENTATION_PLAN.md`, whose Phase 3 checkboxes are currently stale relative to the implemented
-code and this detailed progress record.
+`IMPLEMENTATION_PLAN.md`; this record is reconciled with the current implementation and supported
+Python 3.12 CPU CI evidence.
 
 ## Stage restartability and publication
 
@@ -98,8 +98,8 @@ label logic.
 - [x] Complete intervals required by default; bar-close timestamp causality preserved.
 - [x] Equal-time multi-asset output ordering is deterministic independent of input ordering.
 - [x] Malformed/non-finite canonical inputs and unsupported frequencies fail closed.
-- [ ] **BLOCKED — production calendar validation:** exchange holidays/early closes require the
-  intended production calendar dependency/source.
+- [x] Production exchange-calendar support uses `exchange_calendars`; XNYS holidays and early
+  closes are covered by CPU-CI regressions and feed exact per-session resampling specifications.
 
 ## Point-in-time universe
 
@@ -119,8 +119,8 @@ label logic.
 - [x] Prefix-invariance tests prove future observations cannot alter earlier feature rows.
 - [x] Model-ready feature inputs must be finite/valid and every derived feature is checked for
   finiteness before publication, preventing NaN/Inf propagation or overflow from reaching packing.
-- [ ] **BLOCKED — production columnar/performance validation:** Polars/PyArrow/DuckDB and Python
-  3.12 cannot be installed in this sandbox.
+- [x] The supported Python 3.12 CPU environment includes PyArrow, Polars, and DuckDB; the
+  reference feature/packing path is exercised with the production columnar dependency set.
 
 ## Labels
 
@@ -140,8 +140,9 @@ label logic.
 
 ## Packing
 
-- [ ] **BLOCKED — research representation:** Parquet + Zstd cannot be implemented/validated here
-  because PyArrow/Polars cannot be installed and no Parquet engine is available.
+- [x] Parquet + Zstd research representation with deterministic row ordering, exact int64
+  nanosecond timestamps, float32 feature/target columns, semantic schema metadata, checksummed
+  manifests, atomic publication, and fail-closed corruption/tamper validation.
 - [x] Deterministic NumPy `.npy` memory-mapped reference training representation.
 - [x] Features/targets, asset IDs, and exact integer-derived nanosecond timestamps are preserved with
   every sample.
@@ -160,7 +161,22 @@ reference, not a claim that it is the final H200 loader representation.
 
 ## Validation performed
 
-Historical repository/sandbox validation already recorded for earlier Phase 3 increments includes:
+Authoritative supported-environment verification now runs on Ubuntu 24.04 / Python 3.12 through
+the permanent CPU GitHub Actions gate. Current repository-wide result:
+
+```text
+Ruff: all checks passed
+Formatting: all files formatted
+mypy: success, no issues in 34 source files
+pytest: 241 passed, 1 skipped
+```
+
+The only skipped test is the opt-in real S3 provider gate. The Parquet/Zstd tests independently
+round-trip through PyArrow and verify readability through Polars and DuckDB, while corruption,
+semantic-metadata tampering, exact timestamps, float32 representability, deterministic output, and
+Zstd compression are covered by regressions.
+
+Historical repository/sandbox validation recorded for earlier Phase 3 increments includes:
 
 ```text
 114 passed  # earlier Phase 2 + implemented Phase 3 data-contract suite
@@ -168,47 +184,42 @@ Historical repository/sandbox validation already recorded for earlier Phase 3 in
 26 passed   # Raw validation + Security master existing/new regressions
 ```
 
-For this completion audit, a focused sandbox mirror exercised existing Raw validation/Security
-master regressions plus adversarial checks across acquisition, canonicalization, resampling,
-universe construction, features, labels, splits, packing, restartable stage publication, and a
-repeated synthetic multi-asset raw → packed integration build:
+An earlier focused sandbox audit exercised Raw validation/Security master regressions plus
+adversarial checks across acquisition, canonicalization, resampling, universe construction,
+features, labels, splits, packing, restartable stage publication, and a repeated synthetic
+multi-asset raw → packed integration build:
 
 ```text
 38 passed
 ```
 
-The audit mirror also passes `python -m compileall`. The private repository is not mounted in this
-sandbox, so this **is not described as a fresh full-repository pytest run**; the new repository tests
-are committed alongside the implementation so the same adversarial and raw→packed contracts can be
-run directly in a normal checkout/CI environment.
+That historical audit also passed `python -m compileall`. It is retained as focused regression
+evidence; the repository-wide Python 3.12 CI result above is now the authoritative verification.
 
 The synthetic integration gate runs raw validation → security-master canonicalization → 5-minute
 resampling → point-in-time universe selection → causal features → future-only labels → immutable
 split lookup → deterministic packed training data twice and verifies equivalent packed identity and
 arrays independent of sample input order.
 
-No live broad-equities/execution-provider request, real exchange-calendar holiday/early-close run,
-production universe/split freeze, Parquet pipeline, or H200 loader benchmark is claimed as validated
-because those inputs/dependencies/hardware are unavailable here.
+No live broad-equities/execution-provider request, production universe/split freeze, or H200
+loader benchmark is claimed as validated. Exchange-calendar behavior and the Parquet/Zstd research
+representation are now covered by the supported CPU environment.
 
 ## Remaining Phase 3 blockers
 
 - [ ] **BLOCKED — vendor selection/integration:** concrete broad-equities and optional execution-data
   provider adapters require finalized subscriptions/API semantics and live credentials.
-- [ ] **BLOCKED — production exchange calendar:** holiday/early-close behavior must be validated
-  against the selected production calendar source.
 - [ ] **BLOCKED — production universe methodology:** exact cadence/thresholds require the frozen
   production methodology and real history.
-- [ ] **BLOCKED — production columnar research representation:** Parquet + Zstd and columnar
-  performance require PyArrow/Polars or an equivalent available production dependency.
 - [ ] **BLOCKED — production split dates:** actual boundaries depend on the finalized data period.
 - [ ] **BLOCKED — final loader representation/H200 benchmark:** freeze only after representative
   target-hardware measurements.
 
 ## Phase 3 gate
 
-All sandbox-verifiable provider-independent contracts are implemented and audited, including a
-synthetic deterministic raw → packed composition gate and restartable manifest/success-marker
-publication primitive. The **production Phase 3 gate remains BLOCKED** only by the external items
-listed above. Those blockers must be resolved before the production dataset is frozen or an H200
-campaign is treated as valid.
+All CPU-verifiable provider-independent contracts are implemented and pass the supported Python
+3.12 CI gate, including deterministic raw → packed composition, restartable publication, real
+exchange-calendar regressions, and the Parquet/Zstd research representation. The **production
+Phase 3 gate remains BLOCKED** only by vendor selection/integration, frozen production universe and
+split decisions, and final H200 loader benchmarking. Those blockers must be resolved before the
+production dataset is frozen or an H200 campaign is treated as valid.

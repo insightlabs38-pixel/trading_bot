@@ -57,7 +57,7 @@ class InMemoryS3Client:
             raise EndpointConnectionError("transient")
         data = Body.read() if hasattr(Body, "read") else bytes(Body)
         self.objects[(Bucket, Key)] = (data, dict(Metadata))
-        return {"ETag": hashlib.md5(data).hexdigest()}  # noqa: S324 - test-only fake ETag
+        return {"ETag": hashlib.md5(data).hexdigest()}
 
     def head_object(self, *, Bucket: str, Key: str) -> dict:
         try:
@@ -67,7 +67,7 @@ class InMemoryS3Client:
         return {
             "ContentLength": len(data),
             "Metadata": dict(metadata),
-            "ETag": f'"{hashlib.md5(data).hexdigest()}"',  # noqa: S324 - fake ETag
+            "ETag": f'"{hashlib.md5(data).hexdigest()}"',
             "LastModified": datetime(2026, 8, 18, tzinfo=UTC),
         }
 
@@ -94,7 +94,7 @@ class InMemoryS3Client:
         source = (CopySource["Bucket"], CopySource["Key"])
         data, metadata = self.objects[source]
         self.objects[(Bucket, Key)] = (data, dict(metadata))
-        return {"CopyObjectResult": {"ETag": hashlib.md5(data).hexdigest()}}  # noqa: S324
+        return {"CopyObjectResult": {"ETag": hashlib.md5(data).hexdigest()}}
 
     def list_objects_v2(self, **kwargs: Any) -> dict:
         bucket = kwargs["Bucket"]
@@ -106,15 +106,13 @@ class InMemoryS3Client:
                     {
                         "Key": key,
                         "Size": len(data),
-                        "ETag": f'"{hashlib.md5(data).hexdigest()}"',  # noqa: S324
+                        "ETag": f'"{hashlib.md5(data).hexdigest()}"',
                         "LastModified": datetime(2026, 8, 18, tzinfo=UTC),
                     }
                 )
         return {"Contents": contents, "IsTruncated": False}
 
-    def create_multipart_upload(
-        self, *, Bucket: str, Key: str, Metadata: dict[str, str]
-    ) -> dict:
+    def create_multipart_upload(self, *, Bucket: str, Key: str, Metadata: dict[str, str]) -> dict:
         upload_id = f"u{self.next_upload}"
         self.next_upload += 1
         self.multipart[upload_id] = {
@@ -182,15 +180,14 @@ def test_local_backend_round_trip_and_operations(tmp_path: Path) -> None:
     assert [item.key for item in backend.list("datasets")] == ["datasets/source.bin"]
     assert backend.verify_checksum("datasets/source.bin", checksum)
 
-    copied = backend.copy(
-        "datasets/source.bin", "copies/source.bin", expected_sha256=checksum
-    )
+    copied = backend.copy("datasets/source.bin", "copies/source.bin", expected_sha256=checksum)
     assert copied.checksum_sha256 == checksum
 
     destination = tmp_path / "downloaded.bin"
-    assert backend.download(
-        "copies/source.bin", destination, expected_sha256=checksum
-    ).read_bytes() == source.read_bytes()
+    assert (
+        backend.download("copies/source.bin", destination, expected_sha256=checksum).read_bytes()
+        == source.read_bytes()
+    )
 
     backend.delete("datasets/source.bin")
     assert not backend.exists("datasets/source.bin")
@@ -246,9 +243,7 @@ def test_s3_backend_round_trip_and_atomic_temp_cleanup(tmp_path: Path) -> None:
     assert [item.key for item in backend.list("datasets")] == ["datasets/source.bin"]
     assert all(".trading-bot-tmp-" not in key for _bucket, key in client.objects)
 
-    copied = backend.copy(
-        "datasets/source.bin", "copies/source.bin", expected_sha256=checksum
-    )
+    copied = backend.copy("datasets/source.bin", "copies/source.bin", expected_sha256=checksum)
     assert copied.checksum_sha256 == checksum
     destination = tmp_path / "download.bin"
     backend.download("copies/source.bin", destination, expected_sha256=checksum)
@@ -337,9 +332,7 @@ def test_sha256_file_is_streaming_and_stable(tmp_path: Path) -> None:
 
 def test_s3_upload_retry_rewinds_stream_after_partial_read(tmp_path: Path) -> None:
     class PartialReadFailureClient(InMemoryS3Client):
-        def put_object(
-            self, *, Bucket: str, Key: str, Body: Any, Metadata: dict[str, str]
-        ) -> dict:
+        def put_object(self, *, Bucket: str, Key: str, Body: Any, Metadata: dict[str, str]) -> dict:
             self.put_calls += 1
             if self.put_calls == 1:
                 Body.read(3)

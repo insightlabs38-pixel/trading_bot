@@ -25,7 +25,6 @@ from trading_bot.data.security_master import (
 from trading_bot.data.splits import DateRange, SplitManifest, WalkForwardFold
 from trading_bot.data.universe import UniverseMember, UniverseSnapshot
 
-
 START = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
 
 
@@ -145,7 +144,7 @@ def test_future_cross_sectional_rows_cannot_change_prior_feature_panel() -> None
     ]
     baseline = compute_features(prefix, policy=policy)
     extended = compute_features(
-        prefix + [_feature("c", 2, 1000), _feature("a", 2, 500)],
+        [*prefix, _feature("c", 2, 1000), _feature("a", 2, 500)],
         policy=policy,
     )
     assert extended[: len(baseline)] == baseline

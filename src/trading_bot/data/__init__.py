@@ -90,6 +90,16 @@ __all__ += [
     "resample_canonical_bars",
 ]
 
+from trading_bot.data.calendar import (
+    CalendarSessionError,
+    ExchangeCalendarSessionProvider,
+)
+
+__all__ += [
+    "CalendarSessionError",
+    "ExchangeCalendarSessionProvider",
+]
+
 from trading_bot.data.universe import (
     LiquidityObservation,
     UniverseConstructionError,

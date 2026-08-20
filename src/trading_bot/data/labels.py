@@ -7,7 +7,7 @@ import statistics
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Iterable
+from typing import Iterable, TypedDict
 
 
 class LabelGenerationError(RuntimeError):
@@ -56,6 +56,13 @@ class LabelRow:
     quantile_ranks: dict[int, float]
 
 
+class _PreliminaryTargets(TypedDict):
+    future_returns: dict[int, float]
+    future_excess_returns: dict[int, float]
+    directions: dict[int, int]
+    future_volatility: dict[int, float]
+
+
 def generate_labels(
     observations: Iterable[LabelObservation],
     *,
@@ -72,11 +79,11 @@ def generate_labels(
             raise LabelGenerationError("duplicate security/timestamp label observation")
         lookup[identity] = row
         times_by_security[row.security_id].append(row.timestamp)
-    for values in times_by_security.values():
-        values.sort()
+    for timestamps in times_by_security.values():
+        timestamps.sort()
 
     reference_id = policy.reference_security_id
-    prelim: dict[tuple[str, datetime], dict[str, dict[int, float] | dict[int, int]]] = {}
+    prelim: dict[tuple[str, datetime], _PreliminaryTargets] = {}
     for row in sorted(rows, key=lambda value: (value.timestamp, value.security_id)):
         if reference_id == row.security_id and not policy.include_reference_security:
             continue
@@ -126,7 +133,6 @@ def generate_labels(
     by_time_horizon: dict[tuple[datetime, int], list[tuple[str, float]]] = defaultdict(list)
     for (security_id, timestamp), target in prelim.items():
         future_returns = target["future_returns"]
-        assert isinstance(future_returns, dict)
         for horizon, value in future_returns.items():
             by_time_horizon[(timestamp, horizon)].append((security_id, float(value)))
     for (timestamp, horizon), values in by_time_horizon.items():
@@ -141,10 +147,6 @@ def generate_labels(
         excess_returns = target["future_excess_returns"]
         directions = target["directions"]
         future_volatility = target["future_volatility"]
-        assert isinstance(future_returns, dict)
-        assert isinstance(excess_returns, dict)
-        assert isinstance(directions, dict)
-        assert isinstance(future_volatility, dict)
         rank_values = ranks.get(identity, {})
         output.append(
             LabelRow(

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Iterable, Literal
 from zoneinfo import ZoneInfo
 
@@ -28,6 +29,10 @@ class SessionSpec:
     base_interval_minutes: int = 1
 
     def __post_init__(self) -> None:
+        try:
+            ZoneInfo(self.timezone)
+        except (KeyError, ValueError) as exc:
+            raise ValueError(f"unknown session timezone: {self.timezone!r}") from exc
         if self.close_time <= self.open_time:
             raise ValueError("close_time must be later than open_time")
         if self.base_interval_minutes <= 0:
@@ -41,6 +46,9 @@ class SessionSpec:
         if minutes % self.base_interval_minutes:
             raise ValueError("session length must divide evenly by base interval")
         return minutes // self.base_interval_minutes
+
+
+SessionResolver = Callable[[date], SessionSpec]
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,16 +74,17 @@ def resample_canonical_bars(
     frequency: Frequency,
     *,
     session: SessionSpec | None = None,
+    session_resolver: SessionResolver | None = None,
     require_complete: bool = True,
 ) -> tuple[ResampledBar, ...]:
     """Aggregate canonical bars without crossing assets, sessions, or future bucket boundaries."""
     if frequency not in _SUPPORTED_FREQUENCIES:
         raise ValueError(f"unsupported resampling frequency: {frequency!r}")
-    session = session or SessionSpec()
-    timezone = ZoneInfo(session.timezone)
+    default_session = session or SessionSpec()
     rows = tuple(bars)
     seen: set[tuple[str, datetime]] = set()
-    grouped: dict[tuple[str, object, int], list[CanonicalBar]] = defaultdict(list)
+    grouped: dict[tuple[str, date, int], list[CanonicalBar]] = defaultdict(list)
+    sessions_by_date: dict[date, SessionSpec] = {}
 
     for bar in rows:
         _validate_canonical_bar(bar)
@@ -84,10 +93,24 @@ def resample_canonical_bars(
             raise ResamplingError("duplicate security/timestamp cannot be resampled")
         seen.add(identity)
 
+        provisional_local = bar.timestamp.astimezone(ZoneInfo(default_session.timezone))
+        session_date = provisional_local.date()
+        active_session = sessions_by_date.get(session_date)
+        if active_session is None:
+            active_session = _resolve_session(
+                session_date,
+                default_session=default_session,
+                session_resolver=session_resolver,
+            )
+            sessions_by_date[session_date] = active_session
+
+        timezone = ZoneInfo(active_session.timezone)
         local = bar.timestamp.astimezone(timezone)
-        session_date = local.date()
-        open_dt = datetime.combine(session_date, session.open_time, timezone)
-        close_dt = datetime.combine(session_date, session.close_time, timezone)
+        resolved_date = local.date()
+        if resolved_date != session_date:
+            raise ResamplingError("resolved session timezone changes the bar's local trading date")
+        open_dt = datetime.combine(session_date, active_session.open_time, timezone)
+        close_dt = datetime.combine(session_date, active_session.close_time, timezone)
         if not open_dt <= local < close_dt:
             raise ResamplingError(
                 f"bar {bar.security_id}@{bar.timestamp.isoformat()} is outside configured session"
@@ -96,7 +119,7 @@ def resample_canonical_bars(
         if frequency == "1d":
             bucket_index = 0
         else:
-            if frequency % session.base_interval_minutes:
+            if frequency % active_session.base_interval_minutes:
                 raise ValueError("frequency must divide evenly by the base interval")
             bucket_index = elapsed_minutes // frequency
         grouped[(bar.security_id, session_date, bucket_index)].append(bar)
@@ -110,18 +133,44 @@ def resample_canonical_bars(
             item[0][2],
         ),
     )
-    for (_, _, _), bucket in ordered_groups:
+    for (_, session_date, _), bucket in ordered_groups:
+        active_session = sessions_by_date[session_date]
         ordered = sorted(bucket, key=lambda row: row.timestamp)
         expected = (
-            session.expected_session_bars
+            active_session.expected_session_bars
             if frequency == "1d"
-            else int(frequency) // session.base_interval_minutes
+            else int(frequency) // active_session.base_interval_minutes
         )
-        complete = _is_complete_bucket(ordered, expected, session.base_interval_minutes)
+        complete = _is_complete_bucket(
+            ordered,
+            expected,
+            active_session.base_interval_minutes,
+        )
         if require_complete and not complete:
             continue
         output.append(_aggregate_bucket(ordered, frequency, complete))
     return tuple(output)
+
+
+def _resolve_session(
+    session_date: date,
+    *,
+    default_session: SessionSpec,
+    session_resolver: SessionResolver | None,
+) -> SessionSpec:
+    if session_resolver is None:
+        return default_session
+    try:
+        resolved = session_resolver(session_date)
+    except (KeyError, ValueError) as exc:
+        raise ResamplingError(
+            f"no valid trading session is defined for {session_date.isoformat()}"
+        ) from exc
+    if resolved.base_interval_minutes != default_session.base_interval_minutes:
+        raise ResamplingError(
+            "resolved session base interval differs from the configured base interval"
+        )
+    return resolved
 
 
 def _validate_canonical_bar(bar: CanonicalBar) -> None:

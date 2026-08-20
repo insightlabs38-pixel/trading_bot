@@ -13,7 +13,6 @@ from trading_bot.data.labels import (
     generate_labels,
 )
 
-
 START = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
 
 
@@ -101,7 +100,7 @@ def test_appending_data_after_existing_horizon_does_not_change_existing_label() 
     )
     extended = row_for(
         generate_labels(
-            prefix + [observation("a", 6, 1000), observation("a", 7, 1)],
+            [*prefix, observation("a", 6, 1000), observation("a", 7, 1)],
             policy=LabelPolicy(horizons_minutes=(5,)),
         ),
         "a",

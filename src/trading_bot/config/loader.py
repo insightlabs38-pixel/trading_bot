@@ -7,9 +7,9 @@ import os
 import re
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from pydantic import SecretStr
 
 from trading_bot.config.schemas import AppConfig
@@ -80,7 +80,7 @@ def _redact_secrets(value: Any) -> Any:
 def config_to_manifest_dict(config: AppConfig) -> dict[str, Any]:
     """Return a manifest-safe configuration representation with secrets redacted."""
     payload = config.model_dump(mode="python")
-    return _redact_secrets(payload)
+    return cast(dict[str, Any], _redact_secrets(payload))
 
 
 def config_to_canonical_json(config: AppConfig) -> str:

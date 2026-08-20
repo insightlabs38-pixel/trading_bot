@@ -184,13 +184,13 @@ def require_checksum(actual: str, expected: str | None, *, context: str) -> None
         )
 
 
-def retry_call(
-    operation: Callable[[], _T],
+def retry_call[T](
+    operation: Callable[[], T],
     *,
     policy: RetryPolicy,
     is_retryable: Callable[[BaseException], bool],
     sleep: Callable[[float], None] = time.sleep,
-) -> _T:
+) -> T:
     """Run an operation under bounded exponential retry without hidden infinite loops."""
     delay = policy.initial_delay_seconds
     for attempt in range(1, policy.max_attempts + 1):
@@ -209,3 +209,13 @@ def fsync_file(path: Path) -> None:
     """Flush file contents before an atomic local rename publishes them."""
     with path.open("rb") as handle:
         os.fsync(handle.fileno())
+
+
+def fsync_directory(path: Path) -> None:
+    """Flush directory metadata after rename/unlink so publication survives a crash."""
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)

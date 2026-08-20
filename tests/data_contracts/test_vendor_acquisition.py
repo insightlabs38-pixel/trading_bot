@@ -64,9 +64,7 @@ def test_acquisition_preserves_exact_raw_bytes_and_request_record(tmp_path: Path
     raw_path = tmp_path / "restored.bin"
     backend.download(record.raw_object_key, raw_path, expected_sha256=record.payload_sha256)
     assert raw_path.read_bytes() == b"vendor bytes\x00\x01"
-    record_keys = backend.list(
-        f"00_raw/fake/{record.request_sha256}/acquisitions/"
-    )
+    record_keys = backend.list(f"00_raw/fake/{record.request_sha256}/acquisitions/")
     assert len(record_keys) == 1
     record_path = tmp_path / "record.json"
     backend.download(record_keys[0].key, record_path)

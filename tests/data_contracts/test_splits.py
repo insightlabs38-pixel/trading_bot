@@ -72,9 +72,9 @@ def test_final_holdout_is_inaccessible_in_routine_mode() -> None:
     value = manifest()
     with pytest.raises(FinalHoldoutAccessError, match="inaccessible"):
         value.final_holdout_range()
-    assert value.final_holdout_range(
-        access=FinalHoldoutAccess.FINAL_EVALUATION
-    ) == DateRange(start=date(2021, 1, 1), end=date(2021, 12, 31))
+    assert value.final_holdout_range(access=FinalHoldoutAccess.FINAL_EVALUATION) == DateRange(
+        start=date(2021, 1, 1), end=date(2021, 12, 31)
+    )
 
 
 def test_routine_partition_does_not_reveal_final_holdout() -> None:

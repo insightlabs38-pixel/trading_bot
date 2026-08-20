@@ -63,7 +63,7 @@ def test_prefix_invariance_proves_future_rows_do_not_change_earlier_features() -
     prefix = [observation("a", minute, 100 + minute) for minute in range(3)]
     baseline = compute_features(prefix, policy=small_policy())
     extended = compute_features(
-        prefix + [observation("a", 3, 500), observation("a", 4, 1)],
+        [*prefix, observation("a", 3, 500), observation("a", 4, 1)],
         policy=small_policy(),
     )
     assert extended[: len(baseline)] == baseline
