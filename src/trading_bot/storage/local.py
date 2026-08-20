@@ -9,6 +9,7 @@ from pathlib import Path
 from trading_bot.storage.base import (
     ObjectNotFoundError,
     StorageObjectMetadata,
+    fsync_directory,
     fsync_file,
     is_temporary_storage_key,
     normalize_storage_key,
@@ -69,6 +70,7 @@ class LocalStorageBackend:
             require_checksum(sha256_file(temporary), actual, context=str(temporary))
             fsync_file(temporary)
             os.replace(temporary, destination)
+            fsync_directory(destination.parent)
         finally:
             temporary.unlink(missing_ok=True)
         return self.head(key)
@@ -98,6 +100,7 @@ class LocalStorageBackend:
                 os.fsync(target_handle.fileno())
             require_checksum(sha256_file(temporary), actual, context=str(temporary))
             os.replace(temporary, destination)
+            fsync_directory(destination.parent)
         finally:
             temporary.unlink(missing_ok=True)
         return self.head(key)
@@ -121,6 +124,7 @@ class LocalStorageBackend:
             require_checksum(actual, expected_sha256, context=key)
             fsync_file(temporary)
             os.replace(temporary, destination_path)
+            fsync_directory(destination_path.parent)
         finally:
             temporary.unlink(missing_ok=True)
         return destination_path
@@ -145,12 +149,17 @@ class LocalStorageBackend:
             require_checksum(sha256_file(temporary), actual, context=str(temporary))
             fsync_file(temporary)
             os.replace(temporary, destination)
+            fsync_directory(destination.parent)
         finally:
             temporary.unlink(missing_ok=True)
         return self.head(destination_key)
 
     def delete(self, key: str) -> None:
-        self._path(key).unlink(missing_ok=True)
+        path = self._path(key)
+        if not path.exists():
+            return
+        path.unlink()
+        fsync_directory(path.parent)
 
     def head(self, key: str) -> StorageObjectMetadata:
         path = self._path(key)
