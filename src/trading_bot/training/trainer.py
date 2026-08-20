@@ -94,7 +94,7 @@ class Trainer:
         max_steps: int,
         gradient_accumulation_steps: int = 1,
         gradient_clip_norm: float | None = 1.0,
-        precision: Literal["fp32", "bf16", "fp8"] = "fp32",
+        precision: Literal["fp32", "bf16", "fp8"] = "bf16",
         seed: int = 42,
         scheduler: Scheduler | None = None,
         options: TrainerRuntimeOptions | None = None,
