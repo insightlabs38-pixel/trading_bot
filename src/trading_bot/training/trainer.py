@@ -152,7 +152,7 @@ class Trainer:
                     raw_loss = self.loss_fn(output, batch)
                 self._validate_loss(raw_loss)
                 loss_value = float(raw_loss.detach().float().item())
-                (raw_loss / self.gradient_accumulation_steps).backward()
+                torch.autograd.backward(raw_loss / self.gradient_accumulation_steps)
                 pending_micro_steps += 1
                 state = replace(
                     state,
