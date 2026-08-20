@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from dataclasses import replace
@@ -403,6 +404,16 @@ def test_packing_uses_exact_integer_timestamp_conversion_and_shape_checks(tmp_pa
     metadata_path = destination / "metadata.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["feature_count"] = 2
-    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    metadata_bytes = json.dumps(
+        metadata,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    metadata_path.write_bytes(metadata_bytes)
+    (destination / "metadata.sha256").write_text(
+        f"{hashlib.sha256(metadata_bytes).hexdigest()}\n",
+        encoding="ascii",
+    )
     with pytest.raises(PackingError, match="feature array shape"):
         PackedDataset(destination)
