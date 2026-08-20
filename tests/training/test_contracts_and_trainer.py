@@ -64,9 +64,9 @@ def test_trainer_supports_bf16_gradient_accumulation_scheduler_and_heartbeat() -
         max_steps=2,
         gradient_accumulation_steps=2,
         gradient_clip_norm=0.5,
-        precision="bf16",
         options=TrainerRuntimeOptions(heartbeat_interval_steps=1),
     )
+    assert trainer.precision == "bf16"
     state = trainer.fit([_batch(index * 10) for index in range(4)], heartbeat=heartbeats.append)
     assert state.optimizer_step == 2
     assert state.micro_step == 4
