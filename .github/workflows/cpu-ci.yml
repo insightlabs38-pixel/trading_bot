@@ -52,8 +52,8 @@ jobs:
       - name: Resolve CPU dependency set
         run: uv lock
 
-      - name: Sync locked CPU verification environment
-        run: uv sync --locked --group cpu
+      - name: Sync locked CPU training verification environment
+        run: uv sync --locked --group training-cpu
 
       - name: Run lint, format, types, compile, and tests
         run: bash scripts/verify_cpu.sh
