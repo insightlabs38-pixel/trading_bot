@@ -139,7 +139,7 @@ class CausalTransformerReturnModel(TradingModel):
             dropout=0.0,
             activation="gelu",
             batch_first=True,
-            norm_first=True,
+            norm_first=False,
         )
         self.encoder = nn.TransformerEncoder(layer, num_layers=num_layers)
         self.final_norm = nn.LayerNorm(model_features)
