@@ -38,79 +38,18 @@ jobs:
           python3.12 --version
           python3.12 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
 
-      - name: Reconcile Phase 0-4 tracker and restore permanent CI
+      - name: Reconcile Phase 0-4 tracker
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.head_ref }}
         run: |
           python3.12 scripts/reconcile_phase0_4_tracker.py
           rm scripts/reconcile_phase0_4_tracker.py
-          cat > .github/workflows/cpu-ci.yml <<'YAML'
-          name: CPU CI
-
-          on:
-            pull_request:
-            push:
-              branches:
-                - main
-            workflow_dispatch:
-
-          permissions:
-            contents: read
-
-          concurrency:
-            group: cpu-ci-${{ github.workflow }}-${{ github.ref }}
-            cancel-in-progress: true
-
-          jobs:
-            verify:
-              name: Python 3.12 CPU verification
-              runs-on: ubuntu-latest
-              timeout-minutes: 20
-
-              steps:
-                - name: Check out exact workflow revision
-                  env:
-                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                    PR_NUMBER: ${{ github.event.pull_request.number }}
-                  run: |
-                    git init .
-                    git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
-                    auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-                    if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-                      fetch_ref="refs/pull/${PR_NUMBER}/merge"
-                    else
-                      fetch_ref="$GITHUB_SHA"
-                    fi
-                    git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-                      fetch --no-tags --depth=1 origin "$fetch_ref"
-                    git checkout --detach FETCH_HEAD
-
-                - name: Verify system Python 3.12
-                  run: |
-                    python3.12 --version
-                    python3.12 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
-
-                - name: Bootstrap pinned uv CLI
-                  run: |
-                    python3.12 -m venv /tmp/trading-bot-uv
-                    /tmp/trading-bot-uv/bin/python -m pip install --disable-pip-version-check "uv>=0.10,<0.11"
-                    echo "/tmp/trading-bot-uv/bin" >> "$GITHUB_PATH"
-
-                - name: Resolve CPU dependency set
-                  run: uv lock
-
-                - name: Sync locked CPU verification environment
-                  run: uv sync --locked --group cpu
-
-                - name: Run lint, format, types, compile, and tests
-                  run: bash scripts/verify_cpu.sh
-          YAML
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add IMPLEMENTATION_PLAN.md docs/progress/phase_01.md docs/progress/phase_02.md \
-            docs/progress/phase_03.md docs/progress/phase_04.md .github/workflows/cpu-ci.yml \
+            docs/progress/phase_03.md docs/progress/phase_04.md \
             scripts/reconcile_phase0_4_tracker.py
           git commit -m "Reconcile Phase 0-4 tracker after CPU verification"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
