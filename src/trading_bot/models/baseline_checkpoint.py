@@ -33,8 +33,7 @@ class ClassicalCheckpointIdentity:
 
     def __post_init__(self) -> None:
         if any(
-            not value.strip()
-            for value in (self.model_config_hash, self.dataset_id, self.split_id)
+            not value.strip() for value in (self.model_config_hash, self.dataset_id, self.split_id)
         ):
             raise ValueError("classical checkpoint identity fields must not be blank")
 

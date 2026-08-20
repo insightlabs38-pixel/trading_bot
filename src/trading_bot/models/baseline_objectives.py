@@ -40,9 +40,7 @@ def build_baseline_loss(
         if not any(weight > 0 for weight in objective.task_weights.values()):
             raise ValueError("multitask baseline requires at least one positive task weight")
         return lambda output, batch: _multitask_loss(output, batch, objective, targets)
-    raise ValueError(
-        "distributional objective is not implemented for Phase 7 reference baselines"
-    )
+    raise ValueError("distributional objective is not implemented for Phase 7 reference baselines")
 
 
 def _return_loss(

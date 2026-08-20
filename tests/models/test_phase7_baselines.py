@@ -99,22 +99,14 @@ def _make_split() -> BaselineSplit:
     sequence_index = torch.arange(4, dtype=torch.float32)
     base_timestamp = 1_767_225_600_000_000_000
     for batch_index in range(10):
-        feature_0 = (
-            assets[:, None] + batch_index * 0.03 + sequence_index[None, :] * 0.01
-        )
-        feature_1 = (
-            -0.45 * assets[:, None]
-            + 0.02 * batch_index
-            - 0.005 * sequence_index[None, :]
-        )
+        feature_0 = assets[:, None] + batch_index * 0.03 + sequence_index[None, :] * 0.01
+        feature_1 = -0.45 * assets[:, None] + 0.02 * batch_index - 0.005 * sequence_index[None, :]
         feature_2 = torch.sin(
             assets[:, None] * 1.5 + sequence_index[None, :] * 0.2 + batch_index * 0.1
         )
         features = torch.stack((feature_0, feature_1, feature_2), dim=-1)
         future_return = (
-            0.02 * feature_0[:, -1]
-            - 0.015 * feature_1[:, -1]
-            + 0.004 * feature_2.mean(dim=1)
+            0.02 * feature_0[:, -1] - 0.015 * feature_1[:, -1] + 0.004 * feature_2.mean(dim=1)
         )
         timestamp = base_timestamp + batch_index * 86_400_000_000_000
         batches.append(

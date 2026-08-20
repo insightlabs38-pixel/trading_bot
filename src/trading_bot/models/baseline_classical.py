@@ -359,9 +359,7 @@ class XGBoostBaseline(ClassicalBaseline):
 
     def _build_estimator(self) -> Any:
         xgboost = import_module("xgboost")
-        objective = (
-            "reg:pseudohubererror" if self.objective.loss == "huber" else "reg:squarederror"
-        )
+        objective = "reg:pseudohubererror" if self.objective.loss == "huber" else "reg:squarederror"
         return xgboost.XGBRegressor(
             objective=objective,
             n_estimators=self.n_estimators,
