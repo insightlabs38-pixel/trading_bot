@@ -44,17 +44,54 @@ jobs:
       - name: Sync locked CPU training verification environment
         run: uv sync --locked --group training-cpu
 
-      - name: Apply Ruff fixes and commit source changes
+      - name: Apply exact Ruff fixes and commit source changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.head_ref }}
         run: |
-          uv run ruff check --fix src/trading_bot/evaluation tests/evaluation
+          uv run ruff check --fix src/trading_bot/evaluation tests/evaluation || true
+          python3 - <<'PY'
+          from pathlib import Path
+
+          artifacts = Path("src/trading_bot/evaluation/artifacts.py")
+          text = artifacts.read_text(encoding="utf-8")
+          text = text.replace(
+              '        if not isinstance(asset_id, str) or not asset_id.strip() or not isinstance(timestamp_ns, int):\n',
+              '        if (\n            not isinstance(asset_id, str)\n            or not asset_id.strip()\n            or not isinstance(timestamp_ns, int)\n        ):\n',
+              1,
+          )
+          text = text.replace(
+              '    if list(table.column_names) != expected_columns or int(table.num_rows) != manifest["record_count"]:\n',
+              '    if (\n        list(table.column_names) != expected_columns\n        or int(table.num_rows) != manifest["record_count"]\n    ):\n',
+              1,
+          )
+          artifacts.write_text(text, encoding="utf-8")
+
+          execution = Path("src/trading_bot/evaluation/execution.py")
+          text = execution.read_text(encoding="utf-8")
+          text = text.replace(
+              'def summarize_implementation_shortfall(values_bps: Sequence[float]) -> ImplementationShortfallMetrics:\n',
+              'def summarize_implementation_shortfall(\n    values_bps: Sequence[float],\n) -> ImplementationShortfallMetrics:\n',
+              1,
+          )
+          text = text.replace(
+              '    eligible_timestamp = order.decision_timestamp_ns + int(round(latency_seconds * 1_000_000_000))\n',
+              '    eligible_timestamp = order.decision_timestamp_ns + round(\n        latency_seconds * 1_000_000_000\n    )\n',
+              1,
+          )
+          execution.write_text(text, encoding="utf-8")
+
+          metrics = Path("src/trading_bot/evaluation/metrics.py")
+          text = metrics.read_text(encoding="utf-8")
+          text = text.replace(
+              '    blocks = [np.asarray(block, dtype=np.int64) for block in np.array_split(np.arange(periods), split_count)]\n',
+              '    blocks = [\n        np.asarray(block, dtype=np.int64)\n        for block in np.array_split(np.arange(periods), split_count)\n    ]\n',
+              1,
+          )
+          metrics.write_text(text, encoding="utf-8")
+          PY
           uv run ruff format src/trading_bot/evaluation tests/evaluation
-          if git diff --quiet -- src/trading_bot/evaluation tests/evaluation; then
-            echo "Ruff produced no changes"
-            exit 0
-          fi
+          uv run ruff check src/trading_bot/evaluation tests/evaluation
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/trading_bot/evaluation tests/evaluation
