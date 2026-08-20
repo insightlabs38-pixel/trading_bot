@@ -32,6 +32,10 @@ cpu = [
     "scipy>=1.15,<2",
     "zstandard>=0.23,<1",
 ]
+training-cpu = [
+    { include-group = "cpu" },
+    "torch>=2.10,<3",
+]
 gpu = [
     { include-group = "cpu" },
     "nvidia-ml-py>=13,<14",
@@ -51,9 +55,17 @@ test = [
 required-version = ">=0.10,<0.11"
 default-groups = ["core", "dev", "test"]
 
-# PyTorch, Triton, CUDA libraries, and Transformer Engine are intentionally not
-# installed by uv. The GPU environment will inherit those from a pinned NVIDIA
-# NGC PyTorch image so project dependency syncing cannot replace that stack.
+# Production GPU environments inherit PyTorch, Triton, CUDA libraries, and
+# Transformer Engine from a pinned NVIDIA NGC PyTorch image so uv cannot replace
+# that CUDA stack. The isolated training-cpu group exists only for CPU development
+# and CI and resolves PyTorch from the official CPU-only wheel index.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/trading_bot"]

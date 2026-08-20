@@ -49,11 +49,11 @@ jobs:
           /tmp/trading-bot-uv/bin/python -m pip install --disable-pip-version-check "uv>=0.10,<0.11"
           echo "/tmp/trading-bot-uv/bin" >> "$GITHUB_PATH"
 
-      - name: Resolve CPU dependency set
-        run: uv lock
+      - name: Verify dependency lock is current
+        run: uv lock --check
 
-      - name: Sync locked CPU verification environment
-        run: uv sync --locked --group cpu
+      - name: Sync locked CPU training verification environment
+        run: uv sync --locked --group training-cpu
 
       - name: Run lint, format, types, compile, and tests
         run: bash scripts/verify_cpu.sh
