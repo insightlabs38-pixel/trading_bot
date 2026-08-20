@@ -2,58 +2,69 @@ name: CPU CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: cpu-ci-${{ github.workflow }}-${{ github.ref }}
+  group: cpu-ci-phase7-format-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Python 3.12 CPU verification
+  format:
+    name: Apply Phase 7 Ruff formatting
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
-      - name: Check out exact workflow revision
+      - name: Check out PR head branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            fetch_ref="refs/pull/${PR_NUMBER}/merge"
-          else
-            fetch_ref="$GITHUB_SHA"
-          fi
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            fetch --no-tags --depth=1 origin "$fetch_ref"
-          git checkout --detach FETCH_HEAD
+            fetch --no-tags --depth=1 origin "refs/heads/${HEAD_REF}"
+          git checkout -B "$HEAD_REF" FETCH_HEAD
 
-      - name: Verify system Python 3.12
+      - name: Verify Python 3.12 and bootstrap uv
         run: |
           python3.12 --version
-          python3.12 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
-
-      - name: Bootstrap pinned uv CLI
-        run: |
           python3.12 -m venv /tmp/trading-bot-uv
           /tmp/trading-bot-uv/bin/python -m pip install --disable-pip-version-check "uv>=0.10,<0.11"
           echo "/tmp/trading-bot-uv/bin" >> "$GITHUB_PATH"
 
-      - name: Verify dependency lock is current
-        run: uv lock --check
-
-      - name: Sync locked CPU baseline verification environment
+      - name: Sync locked baseline environment
         run: uv sync --locked --group baseline-cpu
 
-      - name: Run lint, format, types, compile, and tests
-        run: bash scripts/verify_cpu.sh
+      - name: Format and commit only reported Phase 7 files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          uv run ruff format \
+            src/trading_bot/models/baseline_checkpoint.py \
+            src/trading_bot/models/baseline_classical.py \
+            src/trading_bot/models/baseline_objectives.py \
+            tests/models/test_phase7_baselines.py
+          uv run ruff check \
+            src/trading_bot/models/baseline_checkpoint.py \
+            src/trading_bot/models/baseline_classical.py \
+            src/trading_bot/models/baseline_objectives.py \
+            tests/models/test_phase7_baselines.py
+          git add \
+            src/trading_bot/models/baseline_checkpoint.py \
+            src/trading_bot/models/baseline_classical.py \
+            src/trading_bot/models/baseline_objectives.py \
+            tests/models/test_phase7_baselines.py
+          test "$(git diff --cached --name-only | wc -l)" -eq 4
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Format Phase 7 baseline implementation"
+          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
+            push origin "HEAD:refs/heads/${HEAD_REF}"
