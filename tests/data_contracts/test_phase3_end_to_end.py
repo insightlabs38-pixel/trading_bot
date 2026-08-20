@@ -26,7 +26,6 @@ from trading_bot.data.universe import (
     build_universe_snapshot,
 )
 
-
 START = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
 
 

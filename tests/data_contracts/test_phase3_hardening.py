@@ -9,7 +9,6 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-import numpy as np
 import pytest
 from pydantic import ValidationError
 
@@ -54,7 +53,6 @@ from trading_bot.data.universe import (
     build_universe_snapshot,
 )
 from trading_bot.storage import LocalStorageBackend
-
 
 START = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
 

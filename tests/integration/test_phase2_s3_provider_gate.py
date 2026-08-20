@@ -53,7 +53,7 @@ def test_phase2_real_s3_round_trip(tmp_path: Path) -> None:
     source = tmp_path / "generated.bin"
     restored = tmp_path / "restored.bin"
     journal = tmp_path / "restore.json"
-    payload = (f"phase2-provider-gate:{run_id}\n".encode("utf-8")) * 1024
+    payload = (f"phase2-provider-gate:{run_id}\n".encode()) * 1024
     source.write_bytes(payload)
 
     try:

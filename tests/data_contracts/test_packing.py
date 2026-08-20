@@ -18,7 +18,6 @@ from trading_bot.data.packing import (
     pack_training_data,
 )
 
-
 START = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
 
 

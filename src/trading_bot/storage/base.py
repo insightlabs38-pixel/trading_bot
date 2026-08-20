@@ -184,7 +184,7 @@ def require_checksum(actual: str, expected: str | None, *, context: str) -> None
         )
 
 
-def retry_call(
+def retry_call[T](
     operation: Callable[[], _T],
     *,
     policy: RetryPolicy,

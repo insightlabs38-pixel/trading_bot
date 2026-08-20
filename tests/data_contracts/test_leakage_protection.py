@@ -34,7 +34,6 @@ from trading_bot.data.universe import (
     build_universe_snapshot,
 )
 
-
 START = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
 
 
@@ -95,7 +94,7 @@ def test_future_rows_cannot_change_existing_features() -> None:
     )
     prefix = [_feature(0, 100), _feature(1, 101), _feature(2, 102)]
     baseline = compute_features(prefix, policy=policy)
-    extended = compute_features(prefix + [_feature(3, 1000)], policy=policy)
+    extended = compute_features([*prefix, _feature(3, 1000)], policy=policy)
     assert extended[: len(baseline)] == baseline
 
 
@@ -133,7 +132,7 @@ def test_future_liquidity_cannot_change_prior_universe_snapshot() -> None:
     baseline = build_universe_snapshot(master, history, as_of=as_of, policy=policy)
     changed = build_universe_snapshot(
         master,
-        history + [LiquidityObservation("sec-a", as_of + timedelta(days=1), 1000, 1_000_000)],
+        [*history, LiquidityObservation("sec-a", as_of + timedelta(days=1), 1000, 1000000)],
         as_of=as_of,
         policy=policy,
     )

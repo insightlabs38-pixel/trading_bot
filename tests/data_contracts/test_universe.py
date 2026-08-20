@@ -117,7 +117,7 @@ def test_future_observations_do_not_change_earlier_snapshot() -> None:
 
 def test_observation_on_rebalance_date_is_not_used() -> None:
     as_of = date(2020, 6, 1)
-    rows = history(as_of) + [obs("a", as_of, 1000, 1_000_000)]
+    rows = [*history(as_of), obs("a", as_of, 1000, 1000000)]
     snapshot = build_universe_snapshot(security_master(), rows, as_of=as_of, policy=policy())
     assert snapshot.security_ids[0] == "b"
 
@@ -137,7 +137,8 @@ def test_historical_delisted_security_is_eligible_before_delisting() -> None:
 
 def test_non_common_and_future_listings_are_excluded() -> None:
     as_of = date(2020, 6, 1)
-    rows = history(as_of) + [
+    rows = [
+        *history(as_of),
         obs("future", as_of - timedelta(days=1), 100, 10000),
         obs("future", as_of - timedelta(days=2), 100, 10000),
     ]

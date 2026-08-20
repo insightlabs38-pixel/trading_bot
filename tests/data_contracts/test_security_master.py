@@ -111,7 +111,8 @@ def test_actions_can_be_queried_only_through_as_of_date() -> None:
 
 def test_overlapping_symbol_periods_for_same_security_are_rejected() -> None:
     payload = master().model_dump(mode="python")
-    payload["symbols"] = tuple(payload["symbols"]) + (
+    payload["symbols"] = (
+        *tuple(payload["symbols"]),
         SymbolPeriod(
             security_id="sec-1",
             symbol="OVERLAP",
@@ -125,7 +126,8 @@ def test_overlapping_symbol_periods_for_same_security_are_rejected() -> None:
 
 def test_same_ticker_cannot_overlap_across_unrelated_securities() -> None:
     payload = master().model_dump(mode="python")
-    payload["securities"] = tuple(payload["securities"]) + (
+    payload["securities"] = (
+        *tuple(payload["securities"]),
         SecurityRecord(
             security_id="sec-3",
             security_type=SecurityType.COMMON_STOCK,
@@ -133,12 +135,9 @@ def test_same_ticker_cannot_overlap_across_unrelated_securities() -> None:
             listing_date=date(2019, 1, 1),
         ),
     )
-    payload["symbols"] = tuple(payload["symbols"]) + (
-        SymbolPeriod(
-            security_id="sec-3",
-            symbol="NEW",
-            start_date=date(2019, 1, 1),
-        ),
+    payload["symbols"] = (
+        *tuple(payload["symbols"]),
+        SymbolPeriod(security_id="sec-3", symbol="NEW", start_date=date(2019, 1, 1)),
     )
     with pytest.raises(ValidationError, match="same symbol overlaps"):
         SecurityMaster.model_validate(payload)
@@ -146,7 +145,8 @@ def test_same_ticker_cannot_overlap_across_unrelated_securities() -> None:
 
 def test_symbol_period_must_respect_listing_boundaries() -> None:
     payload = master().model_dump(mode="python")
-    payload["symbols"] = tuple(payload["symbols"]) + (
+    payload["symbols"] = (
+        *tuple(payload["symbols"]),
         SymbolPeriod(
             security_id="sec-2",
             symbol="PRE",

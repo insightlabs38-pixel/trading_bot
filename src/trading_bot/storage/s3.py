@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import time
@@ -42,8 +43,8 @@ class S3StorageBackend:
         session_token: str | None = None,
         multipart_threshold_bytes: int = 128 * 1024 * 1024,
         multipart_part_size_bytes: int = 64 * 1024 * 1024,
-        retry_policy: RetryPolicy = RetryPolicy(),
-        timeout_policy: TransferTimeoutPolicy = TransferTimeoutPolicy(),
+        retry_policy: RetryPolicy | None = None,
+        timeout_policy: TransferTimeoutPolicy | None = None,
         client: Any | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -57,8 +58,8 @@ class S3StorageBackend:
         self.prefix = normalize_storage_key(prefix, allow_empty=True).rstrip("/")
         self.multipart_threshold_bytes = multipart_threshold_bytes
         self.multipart_part_size_bytes = multipart_part_size_bytes
-        self.retry_policy = retry_policy
-        self.timeout_policy = timeout_policy
+        self.retry_policy = retry_policy or RetryPolicy()
+        self.timeout_policy = timeout_policy or TransferTimeoutPolicy()
         self._sleep = sleep
         self.client = client or self._build_client(
             endpoint_url=endpoint_url,
@@ -235,9 +236,7 @@ class S3StorageBackend:
         if not source_path.is_file():
             raise ObjectNotFoundError(f"local upload source does not exist: {source_path}")
         if source_path.stat().st_size == 0:
-            return self._singlepart_upload(
-                source_path, key, expected_sha256=expected_sha256
-            )
+            return self._singlepart_upload(source_path, key, expected_sha256=expected_sha256)
         checksum = sha256_file(source_path)
         require_checksum(checksum, expected_sha256, context=str(source_path))
         temporary_key = temporary_storage_key(key)
@@ -280,14 +279,12 @@ class S3StorageBackend:
             self._publish_temporary(remote_temporary, remote_final)
         except BaseException:
             if upload_id is not None:
-                try:
+                with contextlib.suppress(BaseException):
                     self.client.abort_multipart_upload(
                         Bucket=self.bucket,
                         Key=remote_temporary,
                         UploadId=upload_id,
                     )
-                except BaseException:
-                    pass
             raise
         finally:
             self._best_effort_delete_remote(remote_temporary)
@@ -397,10 +394,8 @@ class S3StorageBackend:
         return digest.hexdigest().lower() == expected_sha256.lower()
 
     def _best_effort_delete_remote(self, remote_key: str) -> None:
-        try:
+        with contextlib.suppress(BaseException):
             self._call(lambda: self.client.delete_object(Bucket=self.bucket, Key=remote_key))
-        except BaseException:
-            pass
 
 
 def _body_chunks(body: Any, *, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
