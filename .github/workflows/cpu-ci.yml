@@ -2,45 +2,58 @@ name: CPU CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: cpu-ci-phase5-reconcile-${{ github.ref }}
+  group: cpu-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  reconcile:
-    name: Reconcile Phase 5 tracker
+  verify:
+    name: Python 3.12 CPU verification
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
-      - name: Check out PR head
+      - name: Check out exact workflow revision
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            fetch_ref="refs/pull/${PR_NUMBER}/merge"
+          else
+            fetch_ref="$GITHUB_SHA"
+          fi
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            fetch --no-tags --depth=1 origin "refs/heads/${HEAD_REF}"
-          git checkout -B "$HEAD_REF" FETCH_HEAD
+            fetch --no-tags --depth=1 origin "$fetch_ref"
+          git checkout --detach FETCH_HEAD
 
-      - name: Apply tracker reconciliation and remove helper
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
+      - name: Verify system Python 3.12
         run: |
-          python3 scripts/reconcile_phase5_tracker.py
-          rm scripts/reconcile_phase5_tracker.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add IMPLEMENTATION_PLAN.md scripts/reconcile_phase5_tracker.py
-          git commit -m "Reconcile Phase 5 CPU implementation tracker"
-          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            push origin "HEAD:refs/heads/${HEAD_REF}"
+          python3.12 --version
+          python3.12 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
+
+      - name: Bootstrap pinned uv CLI
+        run: |
+          python3.12 -m venv /tmp/trading-bot-uv
+          /tmp/trading-bot-uv/bin/python -m pip install --disable-pip-version-check "uv>=0.10,<0.11"
+          echo "/tmp/trading-bot-uv/bin" >> "$GITHUB_PATH"
+
+      - name: Verify dependency lock is current
+        run: uv lock --check
+
+      - name: Sync locked CPU training verification environment
+        run: uv sync --locked --group training-cpu
+
+      - name: Run lint, format, types, compile, and tests
+        run: bash scripts/verify_cpu.sh
