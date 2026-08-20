@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from trading_bot.storage.base import (
     ChecksumMismatchError,
@@ -363,7 +363,7 @@ def _load_or_create_journal(
             )
         if not isinstance(journal.get("completed"), dict):
             raise BulkTransferError(f"invalid completed map in transfer journal {journal_path}")
-        return journal
+        return cast(dict[str, Any], journal)
     return {
         "schema_version": 1,
         "direction": direction,

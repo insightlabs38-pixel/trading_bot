@@ -12,9 +12,10 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Any, Iterable, Iterator
 
 import numpy as np
+from numpy.typing import NDArray
 
 
 class PackingError(RuntimeError):
@@ -99,7 +100,7 @@ class PackedDataset:
     def iter_batches(
         self,
         batch_size: int,
-    ) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+    ) -> Iterator[tuple[NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]]]:
         if batch_size <= 0:
             raise ValueError("batch_size must be positive")
         for start in range(0, len(self.features), batch_size):
@@ -152,7 +153,7 @@ def pack_training_data(
         raise PackingError(f"destination already exists: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    temporary: Path | None = Path(
+    temporary = Path(
         tempfile.mkdtemp(prefix=f".{destination.name}.tmp-", dir=str(destination.parent))
     )
     try:
@@ -185,7 +186,6 @@ def pack_training_data(
         if destination.exists():
             shutil.rmtree(destination)
         os.replace(temporary, destination)
-        temporary = None
     finally:
         if temporary is not None and temporary.exists():
             shutil.rmtree(temporary, ignore_errors=True)
@@ -239,16 +239,16 @@ def _write_arrays(
 ) -> None:
     sample_count = len(rows)
     max_asset_length = max(len(row.security_id) for row in rows)
-    features = np.lib.format.open_memmap(
+    features = np.lib.format.open_memmap(  # type: ignore[no-untyped-call]
         path / "features.npy", mode="w+", dtype=np.float32, shape=(sample_count, feature_count)
     )
-    targets = np.lib.format.open_memmap(
+    targets = np.lib.format.open_memmap(  # type: ignore[no-untyped-call]
         path / "targets.npy", mode="w+", dtype=np.float32, shape=(sample_count, target_count)
     )
-    timestamps = np.lib.format.open_memmap(
+    timestamps = np.lib.format.open_memmap(  # type: ignore[no-untyped-call]
         path / "timestamps_ns.npy", mode="w+", dtype=np.int64, shape=(sample_count,)
     )
-    assets = np.lib.format.open_memmap(
+    assets = np.lib.format.open_memmap(  # type: ignore[no-untyped-call]
         path / "asset_ids.npy", mode="w+", dtype=f"U{max_asset_length}", shape=(sample_count,)
     )
     for index, row in enumerate(rows):

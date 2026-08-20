@@ -93,9 +93,9 @@ def canonicalize_bars(
         )
         adjusted_volume = bar.volume / split_factor
         adjusted_vwap = None if bar.vwap is None else bar.vwap * split_factor
-        derived = adjusted + (adjusted_volume,)
+        derived = [*adjusted, adjusted_volume]
         if adjusted_vwap is not None:
-            derived += (adjusted_vwap,)
+            derived.append(adjusted_vwap)
         if any(not math.isfinite(value) for value in derived):
             raise CanonicalizationError("adjusted canonical values must remain finite")
 

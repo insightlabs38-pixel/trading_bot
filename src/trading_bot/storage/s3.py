@@ -8,6 +8,7 @@ import os
 import time
 from collections.abc import Callable, Iterator
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -79,8 +80,8 @@ class S3StorageBackend:
         session_token: str | None,
     ) -> Any:
         try:
-            import boto3
-            from botocore.config import Config
+            import boto3  # type: ignore[import-untyped]
+            from botocore.config import Config  # type: ignore[import-untyped]
         except ImportError as exc:  # pragma: no cover - exercised in core-only environments
             raise RuntimeError("boto3 is required to construct an S3 storage client") from exc
         config = Config(
@@ -153,7 +154,7 @@ class S3StorageBackend:
             kwargs: dict[str, Any] = {"Bucket": self.bucket, "Prefix": logical_prefix}
             if continuation is not None:
                 kwargs["ContinuationToken"] = continuation
-            response = self._call(lambda kwargs=kwargs: self.client.list_objects_v2(**kwargs))
+            response = self._call(partial(self.client.list_objects_v2, **kwargs))
             for item in response.get("Contents", []):
                 key = self._logical_key(str(item["Key"]))
                 if is_temporary_storage_key(key):
@@ -257,7 +258,8 @@ class S3StorageBackend:
                 part_number = 1
                 while chunk := handle.read(self.multipart_part_size_bytes):
                     response = self._call(
-                        lambda chunk=chunk, part_number=part_number: self.client.upload_part(
+                        partial(
+                            self.client.upload_part,
                             Bucket=self.bucket,
                             Key=remote_temporary,
                             UploadId=upload_id,

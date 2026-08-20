@@ -185,12 +185,12 @@ def require_checksum(actual: str, expected: str | None, *, context: str) -> None
 
 
 def retry_call[T](
-    operation: Callable[[], _T],
+    operation: Callable[[], T],
     *,
     policy: RetryPolicy,
     is_retryable: Callable[[BaseException], bool],
     sleep: Callable[[float], None] = time.sleep,
-) -> _T:
+) -> T:
     """Run an operation under bounded exponential retry without hidden infinite loops."""
     delay = policy.initial_delay_seconds
     for attempt in range(1, policy.max_attempts + 1):
