@@ -223,7 +223,10 @@ class CheckpointManager:
 
 def _capture_rng_state() -> dict[str, object]:
     python_version, python_state, python_gauss = random.getstate()
-    algorithm, keys, position, has_gauss, cached_gaussian = np.random.get_state()
+    numpy_state = np.random.get_state(legacy=True)
+    if isinstance(numpy_state, dict):
+        raise CheckpointError("NumPy returned an unsupported RNG state representation")
+    algorithm, keys, position, has_gauss, cached_gaussian = numpy_state
     return {
         "torch_cpu": torch.get_rng_state(),
         "torch_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else [],
@@ -262,7 +265,7 @@ def _restore_rng_state(state: dict[str, object]) -> None:
         (
             python_version,
             tuple(cast(list[int], python_state)),
-            cast(float | None, python_gauss),
+            python_gauss,
         )
     )
 
