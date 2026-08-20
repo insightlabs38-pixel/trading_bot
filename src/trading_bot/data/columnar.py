@@ -90,8 +90,8 @@ class ColumnarDataset:
             timestamp_ns = columns["timestamp_ns"][index]
             if not isinstance(security_id, str) or not isinstance(timestamp_ns, int):
                 raise ColumnarDatasetError("Parquet identity columns contain invalid values")
-            features = tuple(float(columns[name][index]) for name in feature_columns)
-            targets = tuple(float(columns[name][index]) for name in target_columns)
+            features = tuple(_coerce_numeric_cell(columns[name][index]) for name in feature_columns)
+            targets = tuple(_coerce_numeric_cell(columns[name][index]) for name in target_columns)
             rows.append(
                 TrainingSample(
                     security_id=security_id,
@@ -362,6 +362,15 @@ def _validate_parquet_contract(metadata: Any, schema: Any, manifest: dict[str, A
     for key, expected in expected_metadata.items():
         if file_metadata.get(key) != expected:
             raise ColumnarDatasetError(f"Parquet semantic metadata mismatch for {key.decode()}")
+
+
+def _coerce_numeric_cell(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ColumnarDatasetError("Parquet feature/target columns contain non-numeric values")
+    converted = float(value)
+    if not math.isfinite(converted):
+        raise ColumnarDatasetError("Parquet feature/target columns contain non-finite values")
+    return converted
 
 
 def _validate_names(names: tuple[str, ...], *, field_name: str) -> None:
