@@ -89,19 +89,24 @@ jobs:
 
           replace(
               "src/trading_bot/storage/s3.py",
+              "from datetime import datetime\n",
+              "from datetime import datetime\nfrom functools import partial\n",
+          )
+          replace(
+              "src/trading_bot/storage/s3.py",
               "            import boto3\n            from botocore.config import Config",
               "            import boto3  # type: ignore[import-untyped]\n"
               "            from botocore.config import Config  # type: ignore[import-untyped]",
           )
           replace(
               "src/trading_bot/storage/s3.py",
-              "lambda kwargs=kwargs: self.client.list_objects_v2(**kwargs)",
-              "lambda: self.client.list_objects_v2(**kwargs)",
+              "response = self._call(lambda kwargs=kwargs: self.client.list_objects_v2(**kwargs))",
+              "response = self._call(partial(self.client.list_objects_v2, **kwargs))",
           )
           replace(
               "src/trading_bot/storage/s3.py",
               "lambda chunk=chunk, part_number=part_number: self.client.upload_part(",
-              "lambda: self.client.upload_part(",
+              "partial(\n                            self.client.upload_part,",
           )
 
           replace(
