@@ -1,8 +1,8 @@
 # Phase 1 Progress — Project and Configuration Foundations
 
-Last updated: **2026-08-18**
+Last updated: **2026-08-20**
 
-Status: **BLOCKED — target-environment confirmation**
+Status: **IN PROGRESS — target-environment CI verification**
 
 This file records validation detail for Phase 1. The authoritative task list remains
 `IMPLEMENTATION_PLAN.md`.
@@ -22,11 +22,16 @@ This file records validation detail for Phase 1. The authoritative task list rem
 - [x] `uv` dependency groups are defined for core, CPU, GPU, development, and test usage.
 - [x] Ruff, pytest, and mypy policy/configuration are defined.
 - [x] `src/trading_bot` package initialization is present.
+- [x] CPU-only GitHub Actions verification is installed on `main`.
+- [x] CI uses only one standard `ubuntu-latest` hosted runner with no GPU/larger-runner dependency.
+- [x] CI installs Python 3.12 and runs the CPU dependency group.
+- [x] `scripts/verify_cpu.sh` provides the same Ruff/format/mypy/compileall/pytest gate locally.
+- [ ] A green target-environment CI run is required before the Phase 1 gate is declared passed.
+- [ ] A committed dependency lock remains a reproducibility improvement to finalize separately.
 
-**BLOCKED — target-environment confirmation:** the current sandbox provides Python 3.13 rather
-than the pinned Python 3.12 runtime and has no package-index access, so a clean `uv sync` plus
-Ruff/mypy/full-test run in the supported environment cannot be performed here. This is a
-validation-environment limitation, not an implementation gap in the Python-project section.
+The original sandbox limitation is no longer the only path to target-environment verification:
+`.github/workflows/cpu-ci.yml` now provides a repository-native Python 3.12 gate. The workflow has a
+20-minute timeout and cancels superseded runs to conserve standard hosted-runner minutes.
 
 ## Configuration system
 
@@ -76,10 +81,10 @@ validation-environment limitation, not an implementation gap in the Python-proje
 - [x] `python -m trading_bot.metadata` provides the minimal run-manifest command required by the
   Phase 1 gate and does not require market data or a GPU.
 
-### Sandbox validation performed
+### Prior sandbox validation
 
-The combined configuration/common-metadata suite was executed under Python **3.13.5**, Pydantic
-**2.13.4**, PyYAML **6.0.3**, and pytest **9.0.2**.
+The combined configuration/common-metadata suite was previously executed under Python **3.13.5**,
+Pydantic **2.13.4**, PyYAML **6.0.3**, and pytest **9.0.2**.
 
 Result:
 
@@ -99,11 +104,18 @@ Validated metadata behaviors include:
 - immutable, UTC-normalized run manifests using redacted canonical config content;
 - a CLI smoke test that loads the example config and writes a manifest without market data/GPU.
 
-`python -m compileall` also passes for the configuration and metadata packages/tests, and the
-changed Python files contain no lines longer than the repository's configured 100-character
-Ruff limit.
+`python -m compileall` also passed for the configuration and metadata packages/tests, and the
+changed Python files contained no lines longer than the repository's configured 100-character Ruff
+limit.
 
-**BLOCKED — target-environment confirmation:** the sandbox still lacks the pinned Python 3.12
-runtime, Ruff, and mypy, and cannot install them because package-index access is unavailable.
-Before the Phase 1 gate is declared passed, run the full suite plus Ruff/mypy in the supported
-Python 3.12/uv environment.
+That prior result remains useful regression evidence but is not the supported-runtime gate because
+it used Python 3.13. The repository-native CI now supplies the missing Python 3.12/Ruff/mypy/full-
+test verification path.
+
+## Gate
+
+A minimal command can load a validated configuration, generate a run manifest, and exit successfully
+on any supported machine without requiring market data or a GPU.
+
+**IN PROGRESS — target-environment CI verification.** Declare Phase 1 passed only after the new
+Python 3.12 CPU CI run is green.
