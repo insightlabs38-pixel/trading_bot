@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: cpu-ci-${{ github.workflow }}-${{ github.ref }}
@@ -24,23 +24,19 @@ jobs:
       - name: Check out exact workflow revision
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            fetch_ref="refs/heads/${HEAD_REF}"
+            fetch_ref="refs/pull/${PR_NUMBER}/merge"
           else
             fetch_ref="$GITHUB_SHA"
           fi
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
             fetch --no-tags --depth=1 origin "$fetch_ref"
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            git checkout -B "$HEAD_REF" FETCH_HEAD
-          else
-            git checkout --detach FETCH_HEAD
-          fi
+          git checkout --detach FETCH_HEAD
 
       - name: Verify system Python 3.12
         run: |
@@ -58,205 +54,6 @@ jobs:
 
       - name: Sync locked CPU verification environment
         run: uv sync --locked --group cpu
-
-      - name: Apply strict-mypy hardening fixes
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          python3.12 - <<'PY'
-          from pathlib import Path
-
-          def replace(path_text: str, old: str, new: str, *, count: int = -1) -> None:
-              path = Path(path_text)
-              text = path.read_text(encoding="utf-8")
-              if old not in text:
-                  raise SystemExit(f"expected text not found in {path_text}: {old!r}")
-              text = text.replace(old, new, count)
-              path.write_text(text, encoding="utf-8")
-
-          replace(
-              "src/trading_bot/storage/base.py",
-              "    operation: Callable[[], _T],",
-              "    operation: Callable[[], T],",
-          )
-          replace(
-              "src/trading_bot/storage/base.py",
-              ") -> _T:\n    \"\"\"Run an operation under bounded exponential retry without hidden infinite loops.\"\"\"",
-              ") -> T:\n    \"\"\"Run an operation under bounded exponential retry without hidden infinite loops.\"\"\"",
-          )
-
-          replace(
-              "src/trading_bot/storage/s3.py",
-              "from datetime import datetime\n",
-              "from datetime import datetime\nfrom functools import partial\n",
-          )
-          replace(
-              "src/trading_bot/storage/s3.py",
-              "            import boto3\n            from botocore.config import Config",
-              "            import boto3  # type: ignore[import-untyped]\n"
-              "            from botocore.config import Config  # type: ignore[import-untyped]",
-          )
-          replace(
-              "src/trading_bot/storage/s3.py",
-              "response = self._call(lambda kwargs=kwargs: self.client.list_objects_v2(**kwargs))",
-              "response = self._call(partial(self.client.list_objects_v2, **kwargs))",
-          )
-          replace(
-              "src/trading_bot/storage/s3.py",
-              "lambda chunk=chunk, part_number=part_number: self.client.upload_part(",
-              "partial(\n                            self.client.upload_part,",
-          )
-
-          replace(
-              "src/trading_bot/storage/bulk.py",
-              "from typing import Any, Literal",
-              "from typing import Any, Literal, cast",
-          )
-          replace(
-              "src/trading_bot/storage/bulk.py",
-              "        return journal\n    return {",
-              "        return cast(dict[str, Any], journal)\n    return {",
-          )
-
-          replace(
-              "src/trading_bot/data/labels.py",
-              "from typing import Iterable",
-              "from typing import Iterable, TypedDict",
-          )
-          replace(
-              "src/trading_bot/data/labels.py",
-              "    quantile_ranks: dict[int, float]\n\n\ndef generate_labels(",
-              "    quantile_ranks: dict[int, float]\n\n\n"
-              "class _PreliminaryTargets(TypedDict):\n"
-              "    future_returns: dict[int, float]\n"
-              "    future_excess_returns: dict[int, float]\n"
-              "    directions: dict[int, int]\n"
-              "    future_volatility: dict[int, float]\n\n\n"
-              "def generate_labels(",
-          )
-          replace(
-              "src/trading_bot/data/labels.py",
-              "    for values in times_by_security.values():\n        values.sort()",
-              "    for timestamps in times_by_security.values():\n        timestamps.sort()",
-          )
-          replace(
-              "src/trading_bot/data/labels.py",
-              "    prelim: dict[tuple[str, datetime], dict[str, dict[int, float] | dict[int, int]]] = {}",
-              "    prelim: dict[tuple[str, datetime], _PreliminaryTargets] = {}",
-          )
-          replace(
-              "src/trading_bot/data/labels.py",
-              "        assert isinstance(future_returns, dict)\n",
-              "",
-          )
-          replace(
-              "src/trading_bot/data/labels.py",
-              "        assert isinstance(excess_returns, dict)\n",
-              "",
-          )
-          replace(
-              "src/trading_bot/data/labels.py",
-              "        assert isinstance(directions, dict)\n",
-              "",
-          )
-          replace(
-              "src/trading_bot/data/labels.py",
-              "        assert isinstance(future_volatility, dict)\n",
-              "",
-          )
-
-          replace(
-              "src/trading_bot/data/canonicalization.py",
-              "        derived = adjusted + (adjusted_volume,)\n"
-              "        if adjusted_vwap is not None:\n"
-              "            derived += (adjusted_vwap,)",
-              "        derived = [*adjusted, adjusted_volume]\n"
-              "        if adjusted_vwap is not None:\n"
-              "            derived.append(adjusted_vwap)",
-          )
-
-          replace(
-              "src/trading_bot/config/loader.py",
-              "from typing import Any",
-              "from typing import Any, cast",
-          )
-          replace(
-              "src/trading_bot/config/loader.py",
-              "import yaml",
-              "import yaml  # type: ignore[import-untyped]",
-          )
-          replace(
-              "src/trading_bot/config/loader.py",
-              "    return _redact_secrets(payload)",
-              "    return cast(dict[str, Any], _redact_secrets(payload))",
-          )
-
-          replace(
-              "src/trading_bot/data/packing.py",
-              "from typing import Iterable, Iterator",
-              "from typing import Any, Iterable, Iterator",
-          )
-          replace(
-              "src/trading_bot/data/packing.py",
-              "import numpy as np\n",
-              "import numpy as np\nfrom numpy.typing import NDArray\n",
-          )
-          replace(
-              "src/trading_bot/data/packing.py",
-              "    ) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:",
-              "    ) -> Iterator[tuple[NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]]]:",
-          )
-          replace(
-              "src/trading_bot/data/packing.py",
-              "    temporary: Path | None = Path(\n"
-              "        tempfile.mkdtemp(prefix=f\".{destination.name}.tmp-\", dir=str(destination.parent))\n"
-              "    )",
-              "    temporary = Path(\n"
-              "        tempfile.mkdtemp(prefix=f\".{destination.name}.tmp-\", dir=str(destination.parent))\n"
-              "    )",
-          )
-          replace(
-              "src/trading_bot/data/packing.py",
-              "        os.replace(temporary, destination)\n        temporary = None",
-              "        os.replace(temporary, destination)",
-          )
-          replace(
-              "src/trading_bot/data/packing.py",
-              "    features = np.lib.format.open_memmap(\n",
-              "    features = np.lib.format.open_memmap(  # type: ignore[no-untyped-call]\n",
-          )
-          replace(
-              "src/trading_bot/data/packing.py",
-              "    targets = np.lib.format.open_memmap(\n",
-              "    targets = np.lib.format.open_memmap(  # type: ignore[no-untyped-call]\n",
-          )
-          replace(
-              "src/trading_bot/data/packing.py",
-              "    timestamps = np.lib.format.open_memmap(\n",
-              "    timestamps = np.lib.format.open_memmap(  # type: ignore[no-untyped-call]\n",
-          )
-          replace(
-              "src/trading_bot/data/packing.py",
-              "    assets = np.lib.format.open_memmap(\n",
-              "    assets = np.lib.format.open_memmap(  # type: ignore[no-untyped-call]\n",
-          )
-          PY
-          uv run ruff check . --fix
-          uv run ruff format .
-          uv run ruff check .
-          uv run ruff format --check .
-          uv run mypy
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src
-          if ! git diff --cached --quiet; then
-            git commit -m "Fix strict typing across Phase 0-4 foundation"
-            auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-            git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-              push origin "HEAD:refs/heads/${HEAD_REF}"
-          fi
 
       - name: Run lint, format, types, compile, and tests
         run: bash scripts/verify_cpu.sh
