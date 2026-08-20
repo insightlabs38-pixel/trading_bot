@@ -1,4 +1,4 @@
-"""Additional hardening checks for the reference Phase 3 data pipeline."""
+"""Adversarial regression tests for Phase 3 data-boundary contracts."""
 
 from __future__ import annotations
 
@@ -10,333 +10,371 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from trading_bot.data.acquisition import (
     AcquisitionError,
-    ProviderBatch,
-    ProviderBatchRef,
-    acquire_provider_batch,
-    raw_batch_object_key,
+    AcquisitionRunner,
+    VendorPayload,
+    VendorRequest,
 )
 from trading_bot.data.canonicalization import (
+    CanonicalBar,
     CanonicalizationError,
     canonicalize_bars,
 )
 from trading_bot.data.features import (
-    FeatureGenerationError,
-    FeaturePolicy,
-    generate_features,
+    FeatureObservation,
+    FeaturePipelineError,
+    compute_features,
 )
-from trading_bot.data.labels import LabelGenerationError, LabelObservation, generate_labels
+from trading_bot.data.labels import (
+    LabelGenerationError,
+    LabelObservation,
+    LabelPolicy,
+    generate_labels,
+)
 from trading_bot.data.packing import PackedDataset, PackingError, TrainingSample, pack_training_data
-from trading_bot.data.raw_validation import RawValidationError, validate_raw_bars
-from trading_bot.data.resampling import ResamplingError, SessionSpec, resample_canonical_bars
+from trading_bot.data.raw_validation import AnomalyCode, RawBar, validate_raw_bars
+from trading_bot.data.resampling import ResamplingError, resample_canonical_bars
 from trading_bot.data.security_master import (
     CorporateAction,
     CorporateActionType,
     SecurityMaster,
-    SecurityMasterError,
     SecurityRecord,
     SecurityType,
     SymbolPeriod,
 )
-from trading_bot.data.splits import SplitError, SplitPolicy, build_splits
+from trading_bot.data.splits import DateRange, SplitManifest, WalkForwardFold
 from trading_bot.data.universe import (
     LiquidityObservation,
     UniverseConstructionError,
     UniversePolicy,
     build_universe_snapshot,
 )
-from trading_bot.data.vendor import RawBar, RawBarBatch
-from trading_bot.storage.local import LocalStorageBackend
+from trading_bot.storage import LocalStorageBackend
+
+START = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
 
 
-def _security_master() -> SecurityMaster:
+class MetadataAdapter:
+    provider_name = "fake"
+
+    def __init__(self, metadata: dict[str, object] | None = None) -> None:
+        self.metadata = metadata or {}
+
+    def fetch(self, request: VendorRequest) -> VendorPayload:
+        return VendorPayload(b"raw", response_metadata=self.metadata)  # type: ignore[arg-type]
+
+
+def _master(*, delisting_date: date | None = None) -> SecurityMaster:
+    record = SecurityRecord(
+        security_id="sec-1",
+        security_type=SecurityType.COMMON_STOCK,
+        exchange="NASDAQ",
+        listing_date=date(2020, 1, 1),
+        delisting_date=delisting_date,
+    )
     return SecurityMaster(
-        version="v1",
-        securities=(
-            SecurityRecord(
-                security_id="a",
-                security_type=SecurityType.COMMON_STOCK,
-                exchange="NYSE",
-                listing_date=date(2020, 1, 1),
-            ),
-        ),
+        version="sm-v1",
+        securities=(record,),
         symbols=(
             SymbolPeriod(
-                security_id="a",
+                security_id="sec-1",
                 symbol="AAA",
-                start_date=date(2020, 1, 1),
+                start_date=record.listing_date,
+                end_date=record.delisting_date,
             ),
         ),
     )
 
 
-def _raw_bar(timestamp: datetime, *, close: float = 10.0) -> RawBar:
+def _raw(minute: int = 0) -> RawBar:
     return RawBar(
-        asset_id="a",
-        timestamp=timestamp,
-        open=close,
-        high=close,
-        low=close,
-        close=close,
-        volume=100.0,
-        vwap=close,
+        asset_id="sec-1",
+        timestamp=START + timedelta(minutes=minute),
+        open=100.0,
+        high=101.0,
+        low=99.0,
+        close=100.5,
+        volume=1000.0,
+        vwap=100.2,
     )
 
 
-def test_acquisition_rejects_provider_batch_identity_mismatch(tmp_path: Path) -> None:
-    class Adapter:
-        name = "fake"
-
-        def fetch_bars(self, batch: ProviderBatchRef) -> ProviderBatch:
-            return ProviderBatch(
-                batch=replace(batch, batch_id="wrong"),
-                rows=(_raw_bar(batch.start),),
-            )
-
-    start = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
-    batch = ProviderBatchRef(
-        provider="fake",
-        batch_id="b1",
-        start=start,
-        end=start + timedelta(minutes=1),
-        asset_ids=("a",),
-        interval="1m",
+def _canonical(security_id: str, minute: int) -> CanonicalBar:
+    raw = _raw(minute)
+    return CanonicalBar(
+        security_id=security_id,
+        symbol=security_id.upper(),
+        timestamp=raw.timestamp,
+        raw_open=raw.open,
+        raw_high=raw.high,
+        raw_low=raw.low,
+        raw_close=raw.close,
+        raw_volume=raw.volume,
+        raw_vwap=raw.vwap,
+        adjusted_open=raw.open,
+        adjusted_high=raw.high,
+        adjusted_low=raw.low,
+        adjusted_close=raw.close,
+        adjusted_volume=raw.volume,
+        adjusted_vwap=raw.vwap,
+        cumulative_split_factor=1.0,
+        cash_dividend_per_share=0.0,
     )
-    with pytest.raises(AcquisitionError, match="identity mismatch"):
-        acquire_provider_batch(Adapter(), batch, tmp_path)
 
 
-def test_acquisition_object_key_is_stable_and_scoped() -> None:
-    batch = ProviderBatchRef(
-        provider="fake",
-        batch_id="b1",
-        start=datetime(2024, 1, 2, 14, 30, tzinfo=UTC),
-        end=datetime(2024, 1, 2, 14, 31, tzinfo=UTC),
-        asset_ids=("a",),
-        interval="1m",
-    )
-    assert raw_batch_object_key(batch) == "raw/fake/b1.jsonl"
-
-
-def test_raw_validation_rejects_non_finite_and_bad_ohlc() -> None:
-    timestamp = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
-    with pytest.raises(ValueError, match="finite"):
-        RawBar(
-            asset_id="a",
-            timestamp=timestamp,
-            open=10,
-            high=10,
-            low=10,
-            close=math.inf,
-            volume=100,
-        )
-
-    bad = RawBar(
-        asset_id="a",
-        timestamp=timestamp,
-        open=10,
-        high=9,
-        low=8,
-        close=8.5,
-        volume=100,
-    )
-    with pytest.raises(RawValidationError, match="high is below"):
-        validate_raw_bars([bad], batch_start=timestamp, batch_end=timestamp)
-
-
-def test_raw_validation_rejects_rows_outside_batch_window() -> None:
-    start = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
-    with pytest.raises(RawValidationError, match="outside declared batch window"):
-        validate_raw_bars(
-            [_raw_bar(start + timedelta(minutes=2))],
-            batch_start=start,
-            batch_end=start + timedelta(minutes=1),
-        )
-
-
-def test_security_master_rejects_action_before_listing() -> None:
-    with pytest.raises(SecurityMasterError, match="before listing"):
-        SecurityMaster(
-            version="v1",
-            securities=(
-                SecurityRecord(
-                    security_id="a",
-                    security_type=SecurityType.COMMON_STOCK,
-                    exchange="NYSE",
-                    listing_date=date(2020, 1, 1),
-                ),
+def _split_manifest(**overrides: object) -> SplitManifest:
+    payload: dict[str, object] = {
+        "split_version": "split-v1",
+        "dataset_version": "dataset-v1",
+        "folds": (
+            WalkForwardFold(
+                fold_id="fold-1",
+                train=DateRange(start=date(2020, 1, 1), end=date(2020, 12, 31)),
+                validation=DateRange(start=date(2021, 1, 1), end=date(2021, 6, 30)),
             ),
+        ),
+        "final_holdout_id": "final-v1",
+        "final_holdout": DateRange(start=date(2022, 1, 1), end=date(2022, 12, 31)),
+    }
+    payload.update(overrides)
+    return SplitManifest.model_validate(payload)
+
+
+def test_vendor_request_rejects_nested_runtime_secrets() -> None:
+    with pytest.raises(ValidationError, match="runtime secret"):
+        VendorRequest(
+            provider="fake",
+            dataset="bars",
+            parameters={"auth": {"api_key": "do-not-persist"}},
+        )
+
+
+def test_acquisition_rejects_secret_response_metadata(tmp_path: Path) -> None:
+    runner = AcquisitionRunner(LocalStorageBackend(tmp_path / "store"))
+    request = VendorRequest(provider="fake", dataset="bars")
+    with pytest.raises(AcquisitionError, match="runtime secret"):
+        runner.acquire(MetadataAdapter({"authorization": "secret"}), request)
+
+
+def test_acquisition_requires_aware_clock_and_same_time_records_do_not_collide(
+    tmp_path: Path,
+) -> None:
+    request = VendorRequest(provider="fake", dataset="bars")
+    backend = LocalStorageBackend(tmp_path / "store")
+    naive = AcquisitionRunner(backend, now=lambda: datetime(2026, 8, 18, 10, 0))
+    with pytest.raises(AcquisitionError, match="timezone-aware"):
+        naive.acquire(MetadataAdapter(), request)
+
+    timestamp = datetime(2026, 8, 18, 10, 0, tzinfo=UTC)
+    runner = AcquisitionRunner(backend, now=lambda: timestamp)
+    runner.acquire(MetadataAdapter(), request)
+    runner.acquire(MetadataAdapter(), request)
+    prefix = f"00_raw/fake/{request.request_sha256()}/acquisitions/"
+    assert len(backend.list(prefix)) == 2
+
+
+def test_raw_validation_can_detect_an_asset_with_no_rows_at_all() -> None:
+    report = validate_raw_bars(
+        [_raw()],
+        expected_sessions=(date(2024, 1, 2),),
+        expected_assets=("sec-1", "sec-2"),
+    )
+    missing = [item for item in report.anomalies if item.code == AnomalyCode.MISSING_SESSION]
+    assert [(item.asset_id, item.message) for item in missing] == [
+        ("sec-2", "expected session 2024-01-02 has no raw bars")
+    ]
+
+
+def test_expected_assets_require_sessions_and_unique_nonblank_ids() -> None:
+    with pytest.raises(ValueError, match="requires expected_sessions"):
+        validate_raw_bars([_raw()], expected_assets=("sec-1",))
+    with pytest.raises(ValueError, match="duplicate identifiers"):
+        validate_raw_bars(
+            [_raw()],
+            expected_sessions=(date(2024, 1, 2),),
+            expected_assets=("sec-1", "sec-1"),
+        )
+
+
+def test_security_master_symbol_history_must_cover_listing_lifetime() -> None:
+    record = SecurityRecord(
+        security_id="sec-1",
+        security_type=SecurityType.COMMON_STOCK,
+        exchange="NASDAQ",
+        listing_date=date(2020, 1, 1),
+    )
+    with pytest.raises(ValidationError, match="begin on the security listing_date"):
+        SecurityMaster(
+            version="sm-v1",
+            securities=(record,),
             symbols=(
                 SymbolPeriod(
-                    security_id="a",
+                    security_id="sec-1",
                     symbol="AAA",
-                    start_date=date(2020, 1, 1),
+                    start_date=date(2020, 1, 2),
                 ),
             ),
-            corporate_actions=(
-                CorporateAction(
-                    security_id="a",
-                    action_type=CorporateActionType.SPLIT,
-                    effective_date=date(2019, 12, 31),
-                    split_ratio=2.0,
+        )
+    with pytest.raises(ValidationError, match="remain open-ended"):
+        SecurityMaster(
+            version="sm-v1",
+            securities=(record,),
+            symbols=(
+                SymbolPeriod(
+                    security_id="sec-1",
+                    symbol="AAA",
+                    start_date=date(2020, 1, 1),
+                    end_date=date(2021, 1, 1),
                 ),
             ),
         )
 
 
-def test_security_master_rejects_non_finite_action_values() -> None:
-    with pytest.raises(ValueError, match="finite"):
+def test_security_master_rejects_nonfinite_and_duplicate_source_actions() -> None:
+    with pytest.raises(ValidationError, match="finite"):
         CorporateAction(
-            security_id="a",
+            security_id="sec-1",
             action_type=CorporateActionType.SPLIT,
-            effective_date=date(2020, 1, 2),
+            effective_date=date(2021, 1, 1),
             split_ratio=math.inf,
         )
 
-
-def test_canonicalization_rejects_overflowed_adjusted_values() -> None:
-    master = SecurityMaster(
-        version="v1",
-        securities=(
-            SecurityRecord(
-                security_id="a",
-                security_type=SecurityType.COMMON_STOCK,
-                exchange="NYSE",
-                listing_date=date(2020, 1, 1),
-            ),
+    value = _master()
+    payload = value.model_dump(mode="python")
+    payload["corporate_actions"] = (
+        CorporateAction(
+            security_id="sec-1",
+            action_type=CorporateActionType.SPLIT,
+            effective_date=date(2021, 1, 1),
+            split_ratio=2.0,
+            source_id="source-1",
         ),
-        symbols=(
-            SymbolPeriod(
-                security_id="a",
-                symbol="AAA",
-                start_date=date(2020, 1, 1),
-            ),
-        ),
-        corporate_actions=tuple(
-            CorporateAction(
-                security_id="a",
-                action_type=CorporateActionType.SPLIT,
-                effective_date=date(2020, 1, 2 + offset),
-                split_ratio=1e100,
-            )
-            for offset in range(3)
+        CorporateAction(
+            security_id="sec-1",
+            action_type=CorporateActionType.CASH_DIVIDEND,
+            effective_date=date(2021, 2, 1),
+            cash_amount=0.5,
+            source_id="source-1",
         ),
     )
-    with pytest.raises(CanonicalizationError, match="finite"):
-        canonicalize_bars(
-            [_raw_bar(datetime(2020, 1, 4, 14, 30, tzinfo=UTC))],
-            master,
-        )
+    with pytest.raises(ValidationError, match="source IDs must be unique"):
+        SecurityMaster.model_validate(payload)
 
 
-def test_resampling_rejects_cross_session_and_off_grid_rows() -> None:
-    session = SessionSpec(
-        session_date=date(2024, 1, 2),
-        open_time=datetime(2024, 1, 2, 9, 30, tzinfo=UTC),
-        close_time=datetime(2024, 1, 2, 9, 35, tzinfo=UTC),
-    )
-    master = _security_master()
-    cross_session = canonicalize_bars(
-        [_raw_bar(datetime(2024, 1, 3, 9, 30, tzinfo=UTC))],
-        master,
-    )
-    with pytest.raises(ResamplingError, match="outside configured session"):
-        resample_canonical_bars(cross_session, session=session, intervals_minutes=(5,))
-
-    off_grid = canonicalize_bars(
-        [_raw_bar(datetime(2024, 1, 2, 9, 30, 30, tzinfo=UTC))],
-        master,
-    )
-    with pytest.raises(ResamplingError, match="base interval grid"):
-        resample_canonical_bars(off_grid, session=session, intervals_minutes=(5,))
+def test_symbol_lookup_rejects_dates_outside_security_lifetime() -> None:
+    value = _master(delisting_date=date(2021, 12, 31))
+    with pytest.raises(KeyError, match="not listed"):
+        value.symbol_for("sec-1", date(2022, 1, 1))
 
 
-def test_universe_rejects_non_finite_liquidity_inputs() -> None:
-    with pytest.raises(ValueError, match="finite"):
-        LiquidityObservation("a", date(2024, 1, 2), price=math.inf, volume=100)
+def test_canonicalization_rejects_invalid_and_duplicate_raw_bars() -> None:
+    invalid = replace(_raw(), close=math.nan)
+    with pytest.raises(CanonicalizationError, match="finite and positive"):
+        canonicalize_bars([invalid], _master())
+    row = _raw()
+    with pytest.raises(CanonicalizationError, match="duplicate"):
+        canonicalize_bars([row, row], _master())
 
 
-def test_universe_rejects_observation_before_listing() -> None:
+def test_resampling_is_input_order_independent_for_equal_time_assets() -> None:
+    rows = [
+        *[_canonical("b", minute) for minute in range(5)],
+        *[_canonical("a", minute) for minute in range(5)],
+    ]
+    forward = resample_canonical_bars(rows, 5)
+    reverse = resample_canonical_bars(reversed(rows), 5)
+    assert forward == reverse
+    assert [item.security_id for item in forward] == ["a", "b"]
+
+
+def test_resampling_rejects_nonfinite_input_and_unsupported_frequency() -> None:
+    invalid = replace(_canonical("a", 0), adjusted_close=math.nan)
+    with pytest.raises(ResamplingError, match="finite and positive"):
+        resample_canonical_bars([invalid], 5, require_complete=False)
+    with pytest.raises(ValueError, match="unsupported"):
+        resample_canonical_bars([], 3)  # type: ignore[arg-type]
+
+
+def test_universe_rejects_nonfinite_and_duplicate_daily_liquidity() -> None:
+    with pytest.raises(ValueError, match="finite and positive"):
+        LiquidityObservation("sec-1", date(2024, 1, 1), math.nan, 100)
+
     policy = UniversePolicy(
-        version="u1",
-        target_size=10,
+        version="v1",
+        target_size=1,
         trailing_observations=2,
         minimum_history_observations=1,
-        minimum_price=1,
-        minimum_average_dollar_volume=1,
     )
-    with pytest.raises(UniverseConstructionError, match="outside security lifetime"):
+    duplicate = LiquidityObservation("sec-1", date(2023, 12, 31), 100, 10)
+    with pytest.raises(UniverseConstructionError, match="duplicate security/date"):
         build_universe_snapshot(
-            _security_master(),
-            [LiquidityObservation("a", date(2019, 12, 31), 10, 100)],
-            as_of=date(2020, 1, 2),
+            _master(),
+            [duplicate, duplicate],
+            as_of=date(2024, 1, 2),
             policy=policy,
         )
 
 
-def test_feature_generation_rejects_duplicate_bars() -> None:
-    master = _security_master()
-    timestamp = datetime(2024, 1, 2, 9, 30, tzinfo=UTC)
-    bars = canonicalize_bars([_raw_bar(timestamp)], master)
-    policy = FeaturePolicy(return_lags=(1,), volatility_windows=(2,), volume_window=2)
-    with pytest.raises(FeatureGenerationError, match="duplicate"):
-        generate_features([bars[0], bars[0]], policy=policy)
+def test_feature_boundary_rejects_nonfinite_input_and_derived_overflow() -> None:
+    with pytest.raises(ValueError, match="finite and positive"):
+        FeatureObservation("a", "A", "Tech", START, 1, 1, 1, math.nan, 1)
 
-
-def test_label_generation_rejects_duplicate_observations() -> None:
-    timestamp = datetime(2024, 1, 2, 9, 30, tzinfo=UTC)
-    row = LabelObservation("a", timestamp, 10.0)
-    with pytest.raises(LabelGenerationError, match="duplicate"):
-        generate_labels([row, row])
-
-
-def test_split_policy_rejects_non_monotonic_dates() -> None:
-    with pytest.raises(SplitError, match="strictly increasing"):
-        SplitPolicy(
-            version="s1",
-            training_start=date(2020, 1, 1),
-            validation_start=date(2020, 6, 1),
-            test_start=date(2020, 5, 1),
-            final_holdout_start=date(2020, 7, 1),
-            end_date=date(2020, 8, 1),
-        )
-
-
-def test_split_builder_rejects_timestamp_outside_declared_window() -> None:
-    policy = SplitPolicy(
-        version="s1",
-        training_start=date(2020, 1, 1),
-        validation_start=date(2020, 2, 1),
-        test_start=date(2020, 3, 1),
-        final_holdout_start=date(2020, 4, 1),
-        end_date=date(2020, 5, 1),
+    huge = FeatureObservation(
+        "a",
+        "A",
+        "Tech",
+        START,
+        1e308,
+        1e308,
+        1e308,
+        1e308,
+        1e308,
+        1e308,
     )
-    with pytest.raises(SplitError, match="outside split policy window"):
-        build_splits(
-            [datetime(2019, 12, 31, tzinfo=UTC)],
-            policy=policy,
-        )
+    with pytest.raises(FeaturePipelineError, match="non-finite feature"):
+        compute_features([huge])
 
 
-def test_packing_rejects_float32_overflow_and_duplicates(tmp_path: Path) -> None:
-    timestamp = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
-    with pytest.raises(PackingError, match="float32"):
+def test_label_generation_rejects_nonfinite_derived_return() -> None:
+    rows = [
+        LabelObservation("a", START, 1e-308),
+        LabelObservation("a", START + timedelta(minutes=5), 1e308),
+    ]
+    with pytest.raises(LabelGenerationError, match="non-finite future_return"):
+        generate_labels(rows, policy=LabelPolicy(horizons_minutes=(5,)))
+
+
+def test_split_schema_and_final_holdout_identity_are_strict() -> None:
+    payload = _split_manifest().model_dump(mode="python")
+    payload["schema_version"] = 2
+    with pytest.raises(ValidationError, match="literal_error"):
+        SplitManifest.model_validate(payload)
+    with pytest.raises(ValidationError, match="distinct from routine fold IDs"):
+        _split_manifest(final_holdout_id="fold-1")
+
+
+def test_packing_rejects_nonfinite_duplicate_and_unrepresentable_samples(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="finite values"):
+        TrainingSample("a", START, (math.nan,), (1.0,))
+
+    row = TrainingSample("a", START, (1.0,), (2.0,))
+    with pytest.raises(PackingError, match="duplicate security/timestamp"):
         pack_training_data(
-            [TrainingSample("a", timestamp, (float(2**128),), (1.0,))],
-            tmp_path / "overflow",
+            [row, row],
+            tmp_path / "duplicate",
             feature_names=("f",),
             target_names=("t",),
             dataset_version="d1",
             split_version="s1",
         )
-
-    duplicate = TrainingSample("a", timestamp, (1.0,), (2.0,))
-    with pytest.raises(PackingError, match="duplicate"):
+    huge = TrainingSample("a", START, (1e100,), (1.0,))
+    with pytest.raises(PackingError, match="representable"):
         pack_training_data(
-            [duplicate, duplicate],
-            tmp_path / "duplicate",
+            [huge],
+            tmp_path / "huge",
             feature_names=("f",),
             target_names=("t",),
             dataset_version="d1",
@@ -378,26 +416,3 @@ def test_packing_uses_exact_integer_timestamp_conversion_and_shape_checks(tmp_pa
     )
     with pytest.raises(PackingError, match="feature array shape"):
         PackedDataset(destination)
-
-
-def test_acquisition_persists_raw_batch_to_storage_backend(tmp_path: Path) -> None:
-    class Adapter:
-        name = "fake"
-
-        def fetch_bars(self, batch: ProviderBatchRef) -> ProviderBatch:
-            return ProviderBatch(batch=batch, rows=(_raw_bar(batch.start),))
-
-    start = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
-    batch = ProviderBatchRef(
-        provider="fake",
-        batch_id="b1",
-        start=start,
-        end=start + timedelta(minutes=1),
-        asset_ids=("a",),
-        interval="1m",
-    )
-    storage = LocalStorageBackend(tmp_path / "objects")
-    result = acquire_provider_batch(Adapter(), batch, tmp_path / "raw", storage=storage)
-    assert result.object_key == "raw/fake/b1.jsonl"
-    assert storage.exists(result.object_key)
-    assert storage.verify_checksum(result.object_key, result.checksum_sha256)
