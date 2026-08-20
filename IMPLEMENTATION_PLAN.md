@@ -14,7 +14,7 @@ This document is the detailed execution plan for `trading_bot`. It is intended t
 
 ### Reconciliation note — 2026-08-20
 
-The Phase 0–4 tracker is reconciled below against the current foundation-hardening branch and its supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete, including production exchange-calendar support and the Parquet + Zstd research representation. Remaining Phase 3/4 production gates require external provider choices/data, frozen production methodology/dates, finalized production-dataset validation, or H200 benchmarking.
+The Phase 0–6 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; and the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external. Remaining open items across Phases 2–6 require external provider/data choices, frozen production methodology/dates, finalized production-data validation, or GPU/H200 acceptance.
 
 CPU-only GitHub Actions verification now runs on one standard `ubuntu-latest` hosted runner using Python 3.12 and the committed `uv.lock`. The permanent read-only gate runs Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite. GPU/Triton/H200 checks remain intentionally excluded until compatible GPU infrastructure is available.
 
@@ -97,7 +97,7 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | 3. CPU data pipeline | **BLOCKED — provider/frozen-methodology/H200 gates only** | Yes |
 | 4. Dataset validation + leakage protection | **BLOCKED — finalized production-data validation only** | Yes |
 | 5. Common training framework | **IN PROGRESS — CPU gate passed; GPU acceptance pending** | Yes |
-| 6. Evaluation/backtesting framework | Not started | Yes |
+| 6. Evaluation/backtesting framework | **IN PROGRESS — CPU gate passed; real factor/BBO data acceptance pending** | Yes |
 | 7. Baseline model families | Not started | Yes |
 | 8. Advanced model families | Not started | Yes |
 | 9. Custom architectures + Triton | Not started | Yes |
@@ -595,85 +595,98 @@ Implement the frozen evaluation contract once and make every model use it.
 
 ## Return accounting
 
-- [ ] Gross portfolio return.
-- [ ] Position changes/turnover.
-- [ ] Fees.
-- [ ] Spread cost.
-- [ ] Slippage.
-- [ ] Market-impact approximation.
-- [ ] Canonical net return/NAV series.
+- [x] Gross portfolio return.
+- [x] Position changes/turnover.
+- [x] Fees.
+- [x] Spread cost.
+- [x] Slippage.
+- [x] Market-impact approximation.
+- [x] Canonical net return/NAV series.
 
 ## Predictive metrics
 
-- [ ] Mean Rank IC.
-- [ ] Median Rank IC.
-- [ ] IC standard deviation.
-- [ ] ICIR.
-- [ ] Fraction of positive IC periods.
-- [ ] IC by fold/regime/horizon.
+- [x] Mean Rank IC.
+- [x] Median Rank IC.
+- [x] IC standard deviation.
+- [x] ICIR.
+- [x] Fraction of positive IC periods.
+- [x] IC by fold/regime/horizon, with sector breakdown support as well.
 
 ## Economic metrics
 
-- [ ] Net Sharpe.
-- [ ] CAGR.
-- [ ] Sortino.
-- [ ] Maximum drawdown.
-- [ ] Drawdown duration.
-- [ ] Calmar.
-- [ ] ES95.
-- [ ] Worst day.
+- [x] Net Sharpe.
+- [x] CAGR.
+- [x] Sortino.
+- [x] Maximum drawdown.
+- [x] Drawdown duration.
+- [x] Calmar.
+- [x] ES95 using the frozen loss-tail convention.
+- [x] Worst day.
 
 ## Trading-friction metrics
 
-- [ ] Turnover.
-- [ ] Total modeled cost.
-- [ ] Break-even transaction cost.
-- [ ] Trade/rebalance count.
-- [ ] Cost stress at multiple multipliers.
-- [ ] Spread stress.
-- [ ] Latency/execution-delay stress for finalists.
+- [x] Turnover.
+- [x] Total modeled cost.
+- [x] Break-even transaction cost.
+- [x] Trade/rebalance count.
+- [x] Cost stress at multiple multipliers.
+- [x] Spread stress.
+- [x] Latency/execution-delay stress for finalists through explicit delayed-return inputs; real execution-data acceptance remains external.
 
 ## Robustness
 
-- [ ] Fold-level statistics.
-- [ ] Seed dispersion.
-- [ ] Positive-fold fraction.
-- [ ] Deflated Sharpe Ratio.
-- [ ] Probability of Backtest Overfitting or equivalent implementation matching frozen contract.
-- [ ] Multiple-testing trial count accounting.
+- [x] Fold-level statistics.
+- [x] Seed dispersion.
+- [x] Positive-fold fraction.
+- [x] Deflated Sharpe Ratio.
+- [x] Probability of Backtest Overfitting via a tested CSCV-style reference implementation matching the frozen diagnostic intent.
+- [x] Multiple-testing trial count accounting.
 
 ## Attribution
 
-- [ ] Market beta.
-- [ ] Common factor exposures.
-- [ ] Residual/alpha diagnostics.
+- [x] Market beta through generic OLS over caller-supplied factor observations.
+- [x] Common factor exposures through the same provider-independent attribution interface.
+- [x] Residual/alpha diagnostics.
+
+Real factor-provider dataset acceptance remains external; Phase 6 does not silently choose a production factor vendor.
 
 ## Execution-oriented finalist metrics
 
-- [ ] Implementation-shortfall calculation.
-- [ ] Participation/liquidity diagnostics.
-- [ ] BBO/L1 execution simulator when execution dataset is available.
-- [ ] Market/limit-order abstraction sufficient for medium-frequency tests.
+- [x] Implementation-shortfall calculation with adverse-execution sign convention.
+- [x] Participation/liquidity diagnostics.
+- [x] BBO/L1 market/limit execution simulator reference path with deterministic synthetic/no-lookahead fixtures; real execution-dataset acceptance remains external.
+- [x] Market/limit-order abstraction sufficient for medium-frequency tests.
 
 ## Leaderboard behavior
 
-- [ ] Hard validity/disqualification gates.
-- [ ] Primary predictive/economic ranking hierarchy.
-- [ ] No opaque single score as sole selection criterion.
-- [ ] Export machine-readable and human-readable reports.
+- [x] Hard validity/disqualification gates.
+- [x] Primary predictive/economic ranking hierarchy.
+- [x] No opaque single score as sole selection criterion.
+- [x] Export deterministic, checksummed machine-readable JSON and human-readable Markdown reports.
 
 ## Tests
 
-- [ ] Hand-calculated metric fixtures.
-- [ ] Zero-return strategy.
-- [ ] Buy-and-hold fixture.
-- [ ] Known-cost fixture.
-- [ ] Drawdown fixture.
-- [ ] No-lookahead execution timing fixture.
+- [x] Hand-calculated metric fixtures.
+- [x] Zero-return strategy.
+- [x] Buy-and-hold fixture.
+- [x] Known-cost fixture.
+- [x] Drawdown fixture.
+- [x] No-lookahead execution timing fixture.
+- [x] Fresh-process saved-prediction gate reproduces core metrics, leaderboard, and report without importing `trading_bot.training` or `torch`.
+
+### Progress note — 2026-08-20
+
+- Canonical return accounting, predictive/economic/friction metrics, robustness diagnostics, provider-independent factor attribution, execution diagnostics/simulation, validity gates, leaderboard ordering, and checksummed reports are implemented under `src/trading_bot/evaluation`.
+- Portfolio construction remains an explicit frozen evaluator input rather than being invented inside Phase 6.
+- The evaluator-side Phase 5 Parquet reader verifies checksums/metadata/Zstd and reproduces the complete CPU leaderboard/report path in a fresh process without importing training code or PyTorch.
+- The supported Python 3.12 read-only PR gate passes lock freshness, Ruff, formatting, strict mypy across 50 source files, compileall, and 263 tests with only the opt-in Phase 2 real-S3 provider gate skipped.
+- Detailed status and external-data acceptance items are recorded in `docs/progress/phase_06.md`.
 
 ## Gate
 
 Given saved predictions, the evaluator can reproduce the complete leaderboard and all core metrics without importing the training code.
+
+**CPU/REFERENCE EVALUATOR GATE PASSED.** The exact fresh-process gate is covered in Python 3.12 CI. Phase 6 remains **IN PROGRESS** only for real common-factor data validation and real BBO/L1 execution-dataset acceptance; no provider-specific production-data result is claimed by the CPU gate.
 
 ---
 
@@ -1479,7 +1492,7 @@ Every material run should record:
 - [ ] Profile before writing custom kernels.
 - [ ] Keep H200 training input local/hot whenever practical.
 - [ ] CPU evaluation/storage operations must not unnecessarily idle the GPU.
-- [ ] Store promoted/final predictions to permit CPU-only reevaluation.
+- [x] Store promoted/final predictions to permit CPU-only reevaluation.
 - [x] Reference packed loader records throughput.
 
 ---
@@ -1511,9 +1524,9 @@ Current recommended sequence, reconciled to implemented work:
 6. [x] Point-in-time universe + feature/label/split reference pipeline.
 7. [x] Dataset leakage/audit suite and deterministic reference packer/loader benchmark.
 8. [x] Add supported-Python CPU CI and close high-value foundation integrity gaps.
-9. [ ] Commit/freeze a dependency lock strategy for reproducible CPU verification.
-10. [ ] Common model/trainer/checkpoint/prediction interfaces.
-11. [ ] Canonical evaluator and metric unit tests.
+9. [x] Commit/freeze a dependency lock strategy for reproducible CPU verification.
+10. [x] Common model/trainer/checkpoint/prediction interfaces.
+11. [x] Canonical evaluator and metric unit tests.
 12. [ ] Simple baseline models and an end-to-end research smoke test.
 13. [ ] Advanced/core model families.
 14. [ ] Custom Market Mixer/reference custom operators.
@@ -1525,7 +1538,7 @@ Current recommended sequence, reconciled to implemented work:
 20. [ ] Full production data build/staging.
 21. [ ] H200 campaign.
 
-External Phase 2/3/4 production blockers should be closed as credentials/data/hardware become available, but they do not prevent CPU/reference implementation of the common training/evaluation framework.
+External Phase 2–6 production/hardware blockers should be closed as credentials, frozen production data/methodology, and GPU infrastructure become available; they do not invalidate the completed CPU/reference training and evaluation gates.
 
 ---
 
@@ -1540,7 +1553,7 @@ The H200 should not be rented for the real campaign until all of the following c
 - [ ] All core architecture families can train with common interfaces.
 - [ ] Custom architectures have reference correctness tests.
 - [ ] Any Triton kernels match references.
-- [ ] Evaluation metrics pass hand-calculated tests.
+- [x] Evaluation metrics pass hand-calculated tests.
 - [ ] Cost/slippage model is frozen.
 - [ ] Campaign YAML/search spaces are frozen.
 - [ ] Scheduler simulation passes.
