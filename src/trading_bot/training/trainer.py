@@ -68,6 +68,15 @@ class TrainingState:
 
 
 @dataclass(frozen=True, slots=True)
+class GpuMemoryTelemetry:
+    """CUDA allocator counters exposed through the common heartbeat contract."""
+
+    allocated_bytes: int
+    reserved_bytes: int
+    peak_allocated_bytes: int
+
+
+@dataclass(frozen=True, slots=True)
 class TrainingHeartbeat:
     """Progress payload suitable for scheduler/monitoring integration."""
 
@@ -75,6 +84,7 @@ class TrainingHeartbeat:
     elapsed_seconds: float
     samples_per_second: float
     learning_rate: float
+    gpu_memory: GpuMemoryTelemetry | None
 
 
 LossFunction = Callable[[ModelOutput, TrainingBatch], Tensor]
@@ -215,6 +225,7 @@ class Trainer:
             elapsed_seconds=elapsed,
             samples_per_second=state.samples_seen / max(elapsed, 1e-12),
             learning_rate=learning_rate,
+            gpu_memory=_gpu_memory_telemetry(self.device),
         )
 
 
@@ -222,3 +233,13 @@ def _seed_process(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
+def _gpu_memory_telemetry(device: torch.device) -> GpuMemoryTelemetry | None:
+    if device.type != "cuda":
+        return None
+    return GpuMemoryTelemetry(
+        allocated_bytes=int(torch.cuda.memory_allocated(device)),
+        reserved_bytes=int(torch.cuda.memory_reserved(device)),
+        peak_allocated_bytes=int(torch.cuda.max_memory_allocated(device)),
+    )
