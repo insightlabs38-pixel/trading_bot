@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import date, datetime
+from importlib import import_module
 from typing import Protocol, cast
 from zoneinfo import ZoneInfo
 
@@ -34,6 +35,10 @@ class _ExchangeCalendar(Protocol):
     def session_close(self, session_date: date) -> _TimestampLike: ...
 
 
+class _ExchangeCalendarsModule(Protocol):
+    def get_calendar(self, calendar_name: str) -> object: ...
+
+
 class ExchangeCalendarSessionProvider:
     """Resolve trading dates and per-session hours from ``exchange_calendars``."""
 
@@ -48,7 +53,7 @@ class ExchangeCalendarSessionProvider:
         if base_interval_minutes <= 0:
             raise ValueError("base_interval_minutes must be positive")
         try:
-            import exchange_calendars as xcals  # type: ignore[import-untyped]
+            xcals = cast(_ExchangeCalendarsModule, import_module("exchange_calendars"))
         except ImportError as exc:  # pragma: no cover - exercised in core-only environments
             raise RuntimeError(
                 "exchange-calendars is required for production exchange session support"
