@@ -14,7 +14,7 @@ This document is the detailed execution plan for `trading_bot`. It is intended t
 
 ### Reconciliation note — 2026-08-20
 
-The Phase 0–6 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; and the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external. Remaining open items across Phases 2–6 require external provider/data choices, frozen production methodology/dates, finalized production-data validation, or GPU/H200 acceptance.
+The Phase 0–7 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; and the Phase 7 CPU/reference baseline-model gate is complete. Remaining open items across Phases 2–6 require external provider/data choices, frozen production methodology/dates, finalized production-data validation, or GPU/H200 acceptance.
 
 CPU-only GitHub Actions verification now runs on one standard `ubuntu-latest` hosted runner using Python 3.12 and the committed `uv.lock`. The permanent read-only gate runs Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite. GPU/Triton/H200 checks remain intentionally excluded until compatible GPU infrastructure is available.
 
@@ -98,7 +98,7 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | 4. Dataset validation + leakage protection | **BLOCKED — finalized production-data validation only** | Yes |
 | 5. Common training framework | **IN PROGRESS — CPU gate passed; GPU acceptance pending** | Yes |
 | 6. Evaluation/backtesting framework | **IN PROGRESS — CPU gate passed; real factor/BBO data acceptance pending** | Yes |
-| 7. Baseline model families | Not started | Yes |
+| 7. Baseline model families | **COMPLETE — CPU/reference baseline gate passed** | Yes |
 | 8. Advanced model families | Not started | Yes |
 | 9. Custom architectures + Triton | Not started | Yes |
 | 10. Experiment configuration/search spaces | Not started | Yes |
@@ -212,7 +212,7 @@ Create the common project infrastructure all later modules depend on.
 
 - Completed: Python project/configuration/common-metadata implementation and a reusable `scripts/verify_cpu.sh` verification gate.
 - CI: `.github/workflows/cpu-ci.yml` uses one standard `ubuntu-latest` runner, Python 3.12, the locked CPU dependency group, Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite.
-- Reproducibility: a Python 3.12-resolved `uv.lock` is committed and CI verifies it with `uv sync --locked --group training-cpu`.
+- Reproducibility: a Python 3.12-resolved `uv.lock` is committed and CI verifies it with `uv sync --locked --group baseline-cpu`.
 - Cost control: one job only, 20-minute timeout, concurrency cancellation, no GPU/larger runner, and read-only repository permissions.
 - Supported-environment verification is green; later Phase 3 columnar additions increased the authoritative full-suite result to 241 passed with only the opt-in real S3 provider gate skipped.
 
@@ -698,31 +698,43 @@ Establish strong simple references before advanced custom research.
 
 ## CPU baselines
 
-- [ ] Ridge/Elastic Net.
-- [ ] Logistic/regression baseline as appropriate.
-- [ ] LightGBM.
-- [ ] XGBoost.
+- [x] Ridge/Elastic Net — both Ridge and Elastic Net reference estimators are implemented.
+- [x] Logistic/regression baseline as appropriate — logistic direction classification and linear return regression are covered.
+- [x] LightGBM.
+- [x] XGBoost through the official CPU-only Python distribution.
 
 ## Neural baselines
 
-- [ ] MLP.
-- [ ] GRU/LSTM.
-- [ ] TCN.
-- [ ] Simple causal Transformer.
+- [x] MLP.
+- [x] GRU/LSTM — both GRU and LSTM references are implemented.
+- [x] TCN with causal left-only temporal convolution.
+- [x] Simple causal Transformer.
 
 ## Requirements for every family
 
-- [ ] Same dataset/split interface.
-- [ ] Same objective configuration interface.
-- [ ] Parameter count.
-- [ ] Throughput benchmark.
-- [ ] Checkpoint/resume.
-- [ ] Unit forward/backward tests.
-- [ ] Small end-to-end training test.
+- [x] Same dataset/split interface through identity-preserving `TrainingBatch` views and `BaselineSplit`.
+- [x] Same validated `ObjectiveConfig` configuration boundary.
+- [x] Parameter/learned-state count — neural parameter count; linear coefficient/intercept count; tree node count plus serialized bytes.
+- [x] Throughput benchmark on the CPU reference path without freezing a hardware-specific threshold.
+- [x] Checkpoint/resume — true optimizer-step continuation for neural families and checksummed fitted-state reconstruction for classical estimators.
+- [x] Unit forward/backward tests for differentiable neural families; classical algorithms use fit/predict tests because backpropagation is not defined for those estimators.
+- [x] Small end-to-end training/fit, prediction-artifact, evaluator, and leaderboard test for every concrete family.
+
+### Progress note — 2026-08-20
+
+- Classical families: Ridge, Elastic Net, logistic direction, LightGBM, and XGBoost all fit from the same rehearsal split, checkpoint/reconstruct, emit common prediction artifacts, and enter the canonical Phase 6 evaluator.
+- Neural families: MLP, GRU, LSTM, TCN, and causal Transformer all perform finite forward/backward, train through the Phase 5 `Trainer`, checkpoint at optimizer step 2, reconstruct/restore, continue through step 4, and publish common prediction artifacts.
+- Objective interface: the validated shared schema covers excess-return MSE/Huber, direction BCE, same-timestamp pairwise ranking, and composite return/rank/direction multitask behavior where applicable; incompatible family/objective combinations fail closed.
+- Rehearsal gate: all ten family entries share one dataset/split identity and one deterministic rank-to-portfolio rule, then produce one cost-aware canonical Phase 6 baseline leaderboard and checksummed report.
+- Dependency isolation: `baseline-cpu` layers LightGBM, scikit-learn, and the official `xgboost-cpu` package on the existing CPU training environment while leaving the production GPU dependency group unchanged.
+- Supported Python 3.12 read-only CI passes lock freshness, Ruff, formatting across 104 files, strict mypy across 55 source files, compileall, and 268 tests with only the unrelated opt-in Phase 2 real-S3 provider gate skipped.
+- Detailed implementation evidence is recorded in `docs/progress/phase_07.md`.
 
 ## Gate
 
 Baseline leaderboard is produced successfully on the rehearsal dataset before advanced architectures are treated as trustworthy.
+
+**PASSED — CPU/REFERENCE BASELINE GATE.** Ten concrete baseline entries spanning classical linear/tree estimators and neural sequence models train or fit, restore from durable checkpoints, publish common prediction artifacts, and produce one canonical rehearsal leaderboard in Python 3.12 CPU CI. Phase 8 may proceed without claiming GPU/H200 performance from this CPU gate.
 
 ---
 
@@ -1527,7 +1539,7 @@ Current recommended sequence, reconciled to implemented work:
 9. [x] Commit/freeze a dependency lock strategy for reproducible CPU verification.
 10. [x] Common model/trainer/checkpoint/prediction interfaces.
 11. [x] Canonical evaluator and metric unit tests.
-12. [ ] Simple baseline models and an end-to-end research smoke test.
+12. [x] Simple baseline models and an end-to-end research smoke test.
 13. [ ] Advanced/core model families.
 14. [ ] Custom Market Mixer/reference custom operators.
 15. [ ] Campaign scheduler/state DB/fault handling.
@@ -1538,7 +1550,7 @@ Current recommended sequence, reconciled to implemented work:
 20. [ ] Full production data build/staging.
 21. [ ] H200 campaign.
 
-External Phase 2–6 production/hardware blockers should be closed as credentials, frozen production data/methodology, and GPU infrastructure become available; they do not invalidate the completed CPU/reference training and evaluation gates.
+External Phase 2–6 production/hardware blockers should be closed as credentials, frozen production data/methodology, and GPU infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, and baseline-model gates.
 
 ---
 

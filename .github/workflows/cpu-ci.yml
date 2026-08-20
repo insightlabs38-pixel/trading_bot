@@ -52,8 +52,8 @@ jobs:
       - name: Verify dependency lock is current
         run: uv lock --check
 
-      - name: Sync locked CPU training verification environment
-        run: uv sync --locked --group training-cpu
+      - name: Sync locked CPU baseline verification environment
+        run: uv sync --locked --group baseline-cpu
 
       - name: Run lint, format, types, compile, and tests
         run: bash scripts/verify_cpu.sh

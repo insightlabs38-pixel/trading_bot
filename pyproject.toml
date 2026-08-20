@@ -36,6 +36,12 @@ training-cpu = [
     { include-group = "cpu" },
     "torch>=2.10,<3",
 ]
+baseline-cpu = [
+    { include-group = "training-cpu" },
+    "lightgbm>=4.6,<5",
+    "scikit-learn>=1.8,<2",
+    "xgboost-cpu>=3.1,<4",
+]
 gpu = [
     { include-group = "cpu" },
     "nvidia-ml-py>=13,<14",
@@ -57,8 +63,9 @@ default-groups = ["core", "dev", "test"]
 
 # Production GPU environments inherit PyTorch, Triton, CUDA libraries, and
 # Transformer Engine from a pinned NVIDIA NGC PyTorch image so uv cannot replace
-# that CUDA stack. The isolated training-cpu group exists only for CPU development
-# and CI and resolves PyTorch from the official CPU-only wheel index.
+# that CUDA stack. The isolated training-cpu group resolves PyTorch from the
+# official CPU-only wheel index. Phase 7's baseline-cpu group layers classical
+# CPU estimators on top without changing the production GPU dependency contract.
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
