@@ -73,6 +73,7 @@ def test_trainer_supports_bf16_gradient_accumulation_scheduler_and_heartbeat() -
     assert state.samples_seen == 16
     assert len(heartbeats) == 2
     assert heartbeats[-1].learning_rate == pytest.approx(0.005)
+    assert heartbeats[-1].gpu_memory is None
 
 
 def test_early_stop_is_external_and_fast_campaign_mode_is_supported() -> None:
