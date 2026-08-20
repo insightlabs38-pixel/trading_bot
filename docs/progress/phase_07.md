@@ -103,11 +103,11 @@ The official CPU-only XGBoost distribution is used so standard CPU CI does not i
 
 ## CPU verification evidence
 
-A permanent read-only GitHub Actions run on Python **3.12.3** verified the complete implementation before tracker reconciliation:
+Permanent read-only GitHub Actions run **32424578953** on Python **3.12.3** verified the complete implementation before tracker reconciliation:
 
 ```text
 uv lock --check: pass
-baseline-cpu locked sync: pass
+baseline-cpu locked sync: pass (73 locked packages)
 Ruff: pass
 formatting: 104 files formatted
 mypy: success, no issues in 55 source files
@@ -115,7 +115,7 @@ compileall: pass
 pytest: 268 passed, 1 skipped
 ```
 
-The single skip remains the existing opt-in Phase 2 real-S3 provider gate and is unrelated to Phase 7.
+The single skip remains the existing opt-in Phase 2 real-S3 provider gate and is unrelated to Phase 7. The final exact-head run after tracker reconciliation is required to close the branch/merge workflow but does not change the model-family acceptance semantics above.
 
 ## Phase 7 status
 
