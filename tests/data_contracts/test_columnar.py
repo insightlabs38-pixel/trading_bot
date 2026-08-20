@@ -69,7 +69,9 @@ def test_parquet_zstd_is_deterministic_and_compressed_in_every_column(tmp_path: 
     assert first.data_sha256 == second.data_sha256
     assert first.manifest_sha256 == second.manifest_sha256
     assert (first.path / "data.parquet").read_bytes() == (second.path / "data.parquet").read_bytes()
-    assert (first.path / "manifest.json").read_bytes() == (second.path / "manifest.json").read_bytes()
+    assert (first.path / "manifest.json").read_bytes() == (
+        second.path / "manifest.json"
+    ).read_bytes()
 
     metadata = pq.read_metadata(first.path / "data.parquet")
     assert metadata.num_row_groups > 0
