@@ -8,10 +8,11 @@ import math
 import os
 import shutil
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Iterable, cast
+from typing import Any, cast
 
 import torch
 from torch import Tensor
