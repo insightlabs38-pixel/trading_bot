@@ -14,7 +14,7 @@ concurrency:
 jobs:
   reconcile:
     name: Reconcile Phase 6 tracker and progress
-    if: github.event_name == 'pull_request' && github.base_ref == 'phase6-cpu-evaluator'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -22,19 +22,19 @@ jobs:
       - name: Check out target Phase 6 branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BASE_REF: ${{ github.base_ref }}
+          TARGET_REF: phase6-cpu-evaluator
         run: |
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}"
-          git checkout -B "$BASE_REF" FETCH_HEAD
+            fetch --no-tags --depth=1 origin "refs/heads/${TARGET_REF}"
+          git checkout -B "$TARGET_REF" FETCH_HEAD
 
       - name: Reconcile tracker and detailed progress
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BASE_REF: ${{ github.base_ref }}
+          TARGET_REF: phase6-cpu-evaluator
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -352,4 +352,4 @@ The single skipped test is the existing opt-in Phase 2 real-S3 provider gate. Th
           git commit -m "Reconcile Phase 6 CPU evaluator tracker"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            push origin "HEAD:refs/heads/${BASE_REF}"
+            push origin "HEAD:refs/heads/${TARGET_REF}"
