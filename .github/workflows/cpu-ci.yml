@@ -2,62 +2,58 @@ name: CPU CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: cpu-ci-phase5-doc-finalize-${{ github.ref }}
+  group: cpu-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  finalize:
-    name: Finalize Phase 5 verification notes
+  verify:
+    name: Python 3.12 CPU verification
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
-      - name: Check out PR head
+      - name: Check out exact workflow revision
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            fetch_ref="refs/pull/${PR_NUMBER}/merge"
+          else
+            fetch_ref="$GITHUB_SHA"
+          fi
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            fetch --no-tags --depth=1 origin "refs/heads/${HEAD_REF}"
-          git checkout -B "$HEAD_REF" FETCH_HEAD
+            fetch --no-tags --depth=1 origin "$fetch_ref"
+          git checkout --detach FETCH_HEAD
 
-      - name: Record successful reconciled-head verification
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
+      - name: Verify system Python 3.12
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          python3.12 --version
+          python3.12 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
 
-          plan = Path("IMPLEMENTATION_PLAN.md")
-          text = plan.read_text(encoding="utf-8")
-          old = "- Supported environment: Python 3.12 CI resolved PyTorch 2.13.0+cpu and passed Ruff, format, strict mypy, compileall, and 252 tests with only the opt-in Phase 2 real-S3 provider gate skipped before final tracker reconciliation."
-          new = "- Supported environment: the reconciled read-only Python 3.12 PR head resolved PyTorch 2.13.0+cpu, passed lock freshness, Ruff, format, strict mypy across 41 source files, compileall, and 252 tests with only the opt-in Phase 2 real-S3 provider gate skipped."
-          if text.count(old) != 1:
-              raise RuntimeError("expected one Phase 5 supported-environment tracker line")
-          plan.write_text(text.replace(old, new, 1), encoding="utf-8")
+      - name: Bootstrap pinned uv CLI
+        run: |
+          python3.12 -m venv /tmp/trading-bot-uv
+          /tmp/trading-bot-uv/bin/python -m pip install --disable-pip-version-check "uv>=0.10,<0.11"
+          echo "/tmp/trading-bot-uv/bin" >> "$GITHUB_PATH"
 
-          progress = Path("docs/progress/phase_05.md")
-          text = progress.read_text(encoding="utf-8")
-          old = "A final CI run is required after this progress/tracker reconciliation and the telemetry-contract\naddition; it must remain green before this branch is considered ready for merge."
-          new = "The reconciled read-only PR head passed the permanent Python 3.12 CPU gate: lock freshness,\nRuff, formatting, strict mypy across 41 source files, compileall, and **252 passed, 1 skipped**.\nThe single skip remains the opt-in Phase 2 real-S3 provider test."
-          if text.count(old) != 1:
-              raise RuntimeError("expected one stale final-run progress paragraph")
-          progress.write_text(text.replace(old, new, 1), encoding="utf-8")
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add IMPLEMENTATION_PLAN.md docs/progress/phase_05.md
-          git commit -m "Record final Phase 5 CPU verification"
-          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            push origin "HEAD:refs/heads/${HEAD_REF}"
+      - name: Verify dependency lock is current
+        run: uv lock --check
+
+      - name: Sync locked CPU training verification environment
+        run: uv sync --locked --group training-cpu
+
+      - name: Run lint, format, types, compile, and tests
+        run: bash scripts/verify_cpu.sh
