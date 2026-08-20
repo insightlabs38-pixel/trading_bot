@@ -55,5 +55,20 @@ jobs:
       - name: Sync locked CPU verification environment
         run: uv sync --locked --group cpu
 
+      - name: Generate temporary Ruff autofix snapshot
+        run: |
+          uv run ruff check . --fix --unsafe-fixes || true
+          uv run ruff format .
+          git diff --name-only
+          git diff --name-only -z | tar --null -T - -czf /tmp/ruff-autofix.tar.gz
+
+      - name: Upload temporary Ruff autofix snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-autofix
+          path: /tmp/ruff-autofix.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Run lint, format, types, compile, and tests
         run: bash scripts/verify_cpu.sh
