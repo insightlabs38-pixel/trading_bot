@@ -2,33 +2,41 @@ name: CPU CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: cpu-ci-phase6-ruff-${{ github.ref }}
+  group: cpu-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   verify:
-    name: Apply Phase 6 Ruff fixes
+    name: Python 3.12 CPU verification
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      - name: Check out PR head
+      - name: Check out exact workflow revision
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            fetch_ref="refs/pull/${PR_NUMBER}/merge"
+          else
+            fetch_ref="$GITHUB_SHA"
+          fi
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            fetch --no-tags --depth=1 origin "refs/heads/${HEAD_REF}"
-          git checkout -B "$HEAD_REF" FETCH_HEAD
+            fetch --no-tags --depth=1 origin "$fetch_ref"
+          git checkout --detach FETCH_HEAD
 
       - name: Verify system Python 3.12
         run: |
@@ -41,61 +49,11 @@ jobs:
           /tmp/trading-bot-uv/bin/python -m pip install --disable-pip-version-check "uv>=0.10,<0.11"
           echo "/tmp/trading-bot-uv/bin" >> "$GITHUB_PATH"
 
+      - name: Verify dependency lock is current
+        run: uv lock --check
+
       - name: Sync locked CPU training verification environment
         run: uv sync --locked --group training-cpu
 
-      - name: Apply exact Ruff fixes and commit source changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          uv run ruff check --fix src/trading_bot/evaluation tests/evaluation || true
-          python3 - <<'PY'
-          from pathlib import Path
-
-          artifacts = Path("src/trading_bot/evaluation/artifacts.py")
-          text = artifacts.read_text(encoding="utf-8")
-          text = text.replace(
-              '        if not isinstance(asset_id, str) or not asset_id.strip() or not isinstance(timestamp_ns, int):\n',
-              '        if (\n            not isinstance(asset_id, str)\n            or not asset_id.strip()\n            or not isinstance(timestamp_ns, int)\n        ):\n',
-              1,
-          )
-          text = text.replace(
-              '    if list(table.column_names) != expected_columns or int(table.num_rows) != manifest["record_count"]:\n',
-              '    if (\n        list(table.column_names) != expected_columns\n        or int(table.num_rows) != manifest["record_count"]\n    ):\n',
-              1,
-          )
-          artifacts.write_text(text, encoding="utf-8")
-
-          execution = Path("src/trading_bot/evaluation/execution.py")
-          text = execution.read_text(encoding="utf-8")
-          text = text.replace(
-              'def summarize_implementation_shortfall(values_bps: Sequence[float]) -> ImplementationShortfallMetrics:\n',
-              'def summarize_implementation_shortfall(\n    values_bps: Sequence[float],\n) -> ImplementationShortfallMetrics:\n',
-              1,
-          )
-          text = text.replace(
-              '    eligible_timestamp = order.decision_timestamp_ns + int(round(latency_seconds * 1_000_000_000))\n',
-              '    eligible_timestamp = order.decision_timestamp_ns + round(\n        latency_seconds * 1_000_000_000\n    )\n',
-              1,
-          )
-          execution.write_text(text, encoding="utf-8")
-
-          metrics = Path("src/trading_bot/evaluation/metrics.py")
-          text = metrics.read_text(encoding="utf-8")
-          text = text.replace(
-              '    blocks = [np.asarray(block, dtype=np.int64) for block in np.array_split(np.arange(periods), split_count)]\n',
-              '    blocks = [\n        np.asarray(block, dtype=np.int64)\n        for block in np.array_split(np.arange(periods), split_count)\n    ]\n',
-              1,
-          )
-          metrics.write_text(text, encoding="utf-8")
-          PY
-          uv run ruff format src/trading_bot/evaluation tests/evaluation
-          uv run ruff check src/trading_bot/evaluation tests/evaluation
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/trading_bot/evaluation tests/evaluation
-          git commit -m "Apply Phase 6 lint and format fixes"
-          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            push origin "HEAD:refs/heads/${HEAD_REF}"
+      - name: Run lint, format, types, compile, and tests
+        run: bash scripts/verify_cpu.sh
