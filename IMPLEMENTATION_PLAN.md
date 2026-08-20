@@ -14,9 +14,9 @@ This document is the detailed execution plan for `trading_bot`. It is intended t
 
 ### Reconciliation note — 2026-08-20
 
-The Phase 3 and Phase 4 master statuses/checklists had fallen behind the repository. They are reconciled below against the code and detailed progress records on `main` through commit `c2089851bcf77b6d988b67467831ca2e8e05c279`, plus the current foundation-hardening branch. Provider-independent Phase 3/4 work is substantially implemented; their production gates remain blocked by real provider/data/hardware dependencies.
+The Phase 0–4 tracker is reconciled below against the current foundation-hardening branch and its supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete, including production exchange-calendar support and the Parquet + Zstd research representation. Remaining Phase 3/4 production gates require external provider choices/data, frozen production methodology/dates, finalized production-dataset validation, or H200 benchmarking.
 
-CPU-only GitHub Actions verification is being added on standard `ubuntu-latest` hosted runners using the pinned Python 3.12 target. GPU/Triton/H200 checks are intentionally excluded until compatible GPU infrastructure is available.
+CPU-only GitHub Actions verification now runs on one standard `ubuntu-latest` hosted runner using Python 3.12 and the committed `uv.lock`. The permanent read-only gate runs Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite. GPU/Triton/H200 checks remain intentionally excluded until compatible GPU infrastructure is available.
 
 ---
 
@@ -92,9 +92,9 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | Phase | Status | Required before H200? |
 |---|---|---|
 | 0. Repository/design baseline | **COMPLETE** | Yes |
-| 1. Project/config foundations | **IN PROGRESS — Python 3.12 CI verification being added** | Yes |
+| 1. Project/config foundations | **COMPLETE** | Yes |
 | 2. Storage + artifact primitives | **BLOCKED — real S3/GMI integration only** | Yes |
-| 3. CPU data pipeline | **BLOCKED — external/provider/production-format gates only** | Yes |
+| 3. CPU data pipeline | **BLOCKED — provider/frozen-methodology/H200 gates only** | Yes |
 | 4. Dataset validation + leakage protection | **BLOCKED — finalized production-data validation only** | Yes |
 | 5. Common training framework | Not started | Yes |
 | 6. Evaluation/backtesting framework | Not started | Yes |
@@ -167,7 +167,7 @@ Create the common project infrastructure all later modules depend on.
 - [x] Add typing policy/tooling if used.
 - [x] Add package metadata and `src/trading_bot` package initialization.
 - [x] Add CPU-only GitHub Actions verification on the supported Python 3.12 runtime.
-- [ ] Commit a dependency lock once the resolved CPU/GPU environment strategy is finalized.
+- [x] Commit a Python 3.12-resolved dependency lock for the CPU verification environment.
 
 ### Configuration system
 
@@ -211,17 +211,16 @@ Create the common project infrastructure all later modules depend on.
 ### Progress note — 2026-08-20
 
 - Completed: Python project/configuration/common-metadata implementation and a reusable `scripts/verify_cpu.sh` verification gate.
-- Added: `.github/workflows/cpu-ci.yml` using one standard `ubuntu-latest` runner, Python 3.12, the CPU dependency group, Ruff, Ruff format checking, mypy, `compileall`, and the full pytest suite.
-- Cost control: one job only, 20-minute timeout, and concurrency cancellation to avoid wasting hosted-runner minutes on superseded commits.
-- Previous sandbox evidence remains useful but is not the target-environment gate because it used Python 3.13.
-- Remaining gate: obtain a green Python 3.12 GitHub Actions run from the repository branch/PR.
-- Remaining reproducibility gap: a committed `uv.lock` is still desirable once the intended resolved environment policy is frozen.
+- CI: `.github/workflows/cpu-ci.yml` uses one standard `ubuntu-latest` runner, Python 3.12, the locked CPU dependency group, Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite.
+- Reproducibility: a Python 3.12-resolved `uv.lock` is committed and CI verifies it with `uv sync --locked --group cpu`.
+- Cost control: one job only, 20-minute timeout, concurrency cancellation, no GPU/larger runner, and read-only repository permissions.
+- Supported-environment verification is green; later Phase 3 columnar additions increased the authoritative full-suite result to 241 passed with only the opt-in real S3 provider gate skipped.
 
 ## Gate
 
 A minimal command can load a validated configuration, generate a run manifest, and exit successfully on any supported machine without requiring market data or a GPU.
 
-**IN PROGRESS — target-environment CI verification.** The functional gate already passes in sandbox mirrors. The new repository CI is intended to close the supported Python 3.12/Ruff/mypy/full-test confirmation.
+**PASSED.** Python 3.12 CPU CI is green, strict lint/type/test verification passes, and the dependency lock is committed.
 
 ---
 
@@ -436,7 +435,7 @@ Primary model research remains centered on 15m/30m medium-frequency behavior.
 
 ## Packing
 
-- [ ] Research representation: Parquet + Zstd. — **BLOCKED until the production columnar dependency/format path is validated.**
+- [x] Research representation: Parquet + Zstd with deterministic ordering, exact timestamps, float32 feature/target columns, semantic metadata, checksummed manifests, and fail-closed validation.
 - [x] Deterministic NumPy `.npy` memory-mapped reference training representation.
 - [x] Preserve asset IDs and exact timestamps with every sample/prediction target.
 - [x] Support memory mapping.
@@ -447,16 +446,18 @@ Primary model research remains centered on 15m/30m medium-frequency behavior.
 
 ### Progress note — 2026-08-20
 
-- The Phase 3 checklist is now reconciled with the implemented reference pipeline and the detailed `docs/progress/phase_03.md` record.
-- New hardening: production `exchange_calendars` support resolves actual XNYS holidays and early closes and can drive per-date resampling session lengths.
-- New hardening: packed dataset metadata now has an independently verified SHA-256 sidecar; loader validation is stricter for metadata dimensions, names, file records, dtypes, and checksums.
-- Remaining blockers are external or production-freeze items: concrete vendor adapters/credentials, final universe methodology, final split dates, Parquet/Zstd production representation, and H200 loader benchmarking.
+- The Phase 3 checklist is reconciled with the implemented reference pipeline and `docs/progress/phase_03.md`.
+- Production `exchange_calendars` support resolves actual XNYS holidays and early closes and drives per-date resampling session lengths.
+- The NumPy memmap pack verifies array and semantic metadata integrity with SHA-256 sidecars.
+- The Parquet + Zstd research representation is implemented and CPU-CI validated through PyArrow, Polars, and DuckDB with deterministic ordering, exact timestamps, semantic metadata, and checksum/tamper detection.
+- The supported Python 3.12 CPU gate passes 241 tests; the only skip is the opt-in real S3 provider test.
+- Remaining blockers are external/frozen/hardware items: concrete vendor adapters/credentials, final universe methodology, final split dates, and H200 loader-format benchmarking.
 
 ## Gate
 
 A small multi-year/multi-asset sample can run raw → packed end-to-end twice and produce equivalent manifests/data within the expected deterministic tolerance. Leakage/security/universe tests pass.
 
-**REFERENCE/SYNTHETIC GATE PASSED IN PRIOR SANDBOX AUDITS. PRODUCTION PHASE BLOCKED on the external/finalization items above.**
+**REFERENCE/SYNTHETIC CPU GATE PASSED IN PYTHON 3.12 CI. PRODUCTION PHASE BLOCKED only on the external/finalization/H200 items above.**
 
 ---
 
@@ -494,8 +495,9 @@ Make data leakage difficult to introduce accidentally.
 ### Progress note — 2026-08-20
 
 - The Phase 4 checklist is reconciled with the implemented leakage/audit suite and `docs/progress/phase_04.md`.
-- The production calendar dependency gap is now addressed in code for XNYS-style session/early-close validation; it still needs to be exercised on the finalized provider-derived production dataset.
-- The production Phase 4 gate remains blocked because the final provider dataset, frozen universe/split definitions, and final columnar representation do not yet exist.
+- Exchange-calendar holiday/early-close behavior and the Parquet + Zstd research representation are now exercised by the supported Python 3.12 CPU environment.
+- The complete CPU suite passes 241 tests with only the opt-in real S3 provider test skipped.
+- The production Phase 4 gate remains blocked because the final provider-derived dataset and frozen production universe/split definitions do not yet exist; the exact leakage/audit suite must be rerun on that frozen dataset and final representation.
 
 ## Gate
 

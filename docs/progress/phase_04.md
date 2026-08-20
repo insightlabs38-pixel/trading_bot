@@ -1,12 +1,11 @@
 # Phase 4 Progress — Dataset Validation and Leakage Protection
 
-Last updated: **2026-08-18**
+Last updated: **2026-08-20**
 
 Status: **BLOCKED — production-data validation only**
 
-This file records Phase 4 validation detail. `IMPLEMENTATION_PLAN.md` remains the nominal task list,
-but its Phase 4 checkboxes are stale relative to the implemented code and this detailed progress
-record.
+This file records Phase 4 validation detail. `IMPLEMENTATION_PLAN.md` remains the authoritative
+task list and is reconciled with this record and the supported Python 3.12 CPU CI evidence.
 
 ## Leakage/data-contract invariants
 
@@ -69,25 +68,30 @@ Phase 4 reference contract.
 
 ## Validation performed
 
-Historical validation recorded before this audit included the complete Phase 2 storage suite, all
-then-implemented Phase 3 data-contract tests, the original Phase 4 leakage suite, and dataset-audit
-tests:
+Authoritative supported-environment verification now runs on Ubuntu 24.04 / Python 3.12 through
+the permanent CPU GitHub Actions gate. Current repository-wide result is **241 passed, 1 skipped**
+after Ruff, format, strict mypy, and `compileall` all pass. The one skip is the opt-in real S3
+provider test. Exchange-calendar regressions and the Parquet/Zstd research representation are
+included in this gate.
+
+Historical validation recorded before repository-wide CI included the complete Phase 2 storage
+suite, then-implemented Phase 3 data-contract tests, the original Phase 4 leakage suite, and
+dataset-audit tests:
 
 ```text
 129 passed
 ```
 
-For this completion audit, the existing Phase 4 leakage/audit behavior, Phase 3 completion/raw/
-security regressions, and new Phase 4 adversarial tests were exercised together in the available
-sandbox mirror:
+An earlier focused completion audit exercised the existing Phase 4 leakage/audit behavior, Phase
+3 completion/raw/security regressions, and new Phase 4 adversarial tests together in the sandbox
+mirror:
 
 ```text
 61 passed
 ```
 
-The focused mirror also passes `python -m compileall`. The private repository is not mounted in this
-sandbox, so this **is not described as a fresh full-repository pytest run**. The new regression tests
-are committed beside the implementation for a normal checkout/CI environment.
+That focused mirror also passed `python -m compileall`; it is retained as historical focused
+evidence. The repository-wide Python 3.12 CI result above is now the authoritative verification.
 
 The new adversarial coverage includes final-holdout date omission from routine views/reports,
 future cross-sectional panel invariance, explicit session separation, historical ticker reuse,
@@ -98,19 +102,18 @@ changing universe sizes, duplicate universe dates/members, and malformed univers
 
 - [ ] **BLOCKED — finalized production dataset:** the leakage/data-contract and audit suites must be
   rerun on the real provider-derived dataset before architecture results on that dataset are trusted.
-- [ ] **BLOCKED — production calendar validation:** session/early-close/holiday behavior must be
-  validated against the selected production exchange-calendar source.
 - [ ] **BLOCKED — frozen production universe/splits:** exact universe methodology and production
   split dates remain external Phase 3 decisions and must be frozen before the production Phase 4
   gate can pass.
-- [ ] **BLOCKED — production columnar representation:** the same invariants/audits must be rerun on
-  the finalized Parquet/columnar representation once its unavailable dependencies are present.
+- [ ] **BLOCKED — final production representation/data:** the same invariants/audits must be rerun on
+  the exact frozen provider-derived dataset and final representation used for production research.
 
 ## Phase 4 gate
 
-All sandbox-verifiable leakage/data-contract invariants and dataset-audit primitives are implemented
-and audited. The **production Phase 4 gate remains BLOCKED** only because the finalized production
-dataset and its external Phase 3 dependencies do not yet exist in this environment.
+All CPU-verifiable leakage/data-contract invariants and dataset-audit primitives are implemented
+and pass the supported Python 3.12 CI gate. The **production Phase 4 gate remains BLOCKED** only
+because the finalized provider-derived dataset and frozen Phase 3 production decisions do not yet
+exist; the suite must be rerun on that exact frozen data/representation.
 
 Reference/synthetic architecture work may use these regression gates, but no architecture result on
 the eventual full production dataset should be treated as trustworthy until this exact suite passes

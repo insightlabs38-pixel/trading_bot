@@ -53,13 +53,14 @@ Result:
 ```text
 Ruff: all checks passed
 Formatting: all files formatted
-mypy: success, no issues in 33 source files
-pytest: 234 passed, 1 skipped in 4.22s
+mypy: success, no issues in 34 source files
+pytest: 241 passed, 1 skipped
 ```
 
 The single skipped test is the opt-in real S3 provider gate in
 `tests/integration/test_phase2_s3_provider_gate.py`; it requires a real S3-compatible test endpoint
-and credentials and therefore does not block the Phase 1 project/configuration gate.
+and credentials and therefore does not block the Phase 1 project/configuration gate. The later
+Phase 3 Parquet/Zstd additions are included in the 241-test result above.
 
 The earlier pre-step GitHub Actions failures are now confirmed to have been hosted-runner minute
 availability rather than repository code or workflow-command failures.

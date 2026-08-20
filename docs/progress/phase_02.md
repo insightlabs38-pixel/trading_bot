@@ -1,8 +1,8 @@
 # Phase 2 Progress — Storage and Artifact Primitives
 
-Last updated: **2026-08-18**
+Last updated: **2026-08-20**
 
-Status: **BLOCKED**
+Status: **BLOCKED — real S3/GMI integration only**
 
 This file records validation detail for Phase 2. The authoritative task list remains
 `IMPLEMENTATION_PLAN.md`.
@@ -95,32 +95,28 @@ TRADING_BOT_S3_TEST_PREFIX
 The harness is implemented now; the provider-specific checkbox remains blocked until this test is
 actually run successfully against GMI Cold Storage or the selected S3-compatible test provider.
 
-## Sandbox test environment
+## Supported CPU CI environment
 
-A dedicated test virtual environment exists at `/mnt/data/trading_bot_test_venv`.
+The public repository now runs the permanent CPU verification workflow on a standard free
+`ubuntu-latest` GitHub-hosted runner with Python 3.12. The committed `uv.lock` resolves the CPU
+dependency set, including boto3 and the storage test dependencies. Ruff, formatting, strict mypy,
+`compileall`, and the full pytest suite execute on every PR update.
 
-The sandbox is itself hosted inside a managed Python environment, so the isolated venv uses a
-sandbox-only `.pth` bridge to the harness's preinstalled site-packages. This permits repeatable
-pytest execution without downloading dependencies.
-
-Attempts to upgrade the venv were made on 2026-08-18:
-
-- Python 3.12 is not installed anywhere in the sandbox.
-- `uv python install 3.12` cannot resolve/download its Python distribution because outbound DNS
-  is blocked.
-- `pip install ruff mypy` likewise cannot reach a package index.
-- no useful cached wheels/interpreters were found for the missing tools.
-
-This does **not** change the repository dependency policy and does not resolve the Phase 1 target-
-environment blocker; the venv still uses Python 3.13.5.
+The authoritative current full-suite result is **241 passed, 1 skipped**. The single skip is this
+phase's opt-in real S3 provider gate because no real GMI/test endpoint or credentials are configured
+in ordinary CI. All local/fake-client storage tests execute and pass in the supported environment.
 
 ## Validation performed
 
-Combined Phase 2 storage suite:
+The current Python 3.12 CPU CI executes the Phase 2 storage suite as part of the complete
+repository gate. Authoritative full-suite result:
 
 ```text
-34 passed
+241 passed, 1 skipped
 ```
+
+The one skip is the intentionally opt-in real-provider test. Historical focused Phase 2 validation
+recorded 34 passing storage tests before repository-wide CI became available.
 
 Also passed:
 
