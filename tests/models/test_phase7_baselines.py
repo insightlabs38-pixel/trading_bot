@@ -32,9 +32,9 @@ from trading_bot.models import (
     ClassicalCheckpointIdentity,
     ElasticNetBaseline,
     GRUReturnModel,
-    LSTMReturnModel,
     LightGBMBaseline,
     LogisticDirectionBaseline,
+    LSTMReturnModel,
     RidgeBaseline,
     TCNReturnModel,
     XGBoostBaseline,
@@ -78,6 +78,19 @@ def _return_objective() -> ObjectiveConfig:
 
 def _direction_objective() -> ObjectiveConfig:
     return ObjectiveConfig(kind="direction", horizons_minutes=(15,), loss="bce")
+
+
+def _multitask_objective() -> ObjectiveConfig:
+    return ObjectiveConfig(
+        kind="multitask",
+        horizons_minutes=(15,),
+        loss="composite",
+        task_weights={
+            "expected_return": 1.0,
+            "rank_score": 0.5,
+            "direction_probability": 0.25,
+        },
+    )
 
 
 def _make_split() -> BaselineSplit:
@@ -244,9 +257,13 @@ def phase7_gate(tmp_path_factory: pytest.TempPathFactory) -> Phase7GateResult:
 
     objective = _return_objective()
     loss_fn = build_baseline_loss(objective, _TARGETS)
+    gradient_loss_fn = build_baseline_loss(_multitask_objective(), _TARGETS)
     for family, factory in _neural_factories():
         gradient_model = factory()
-        gradient_loss = loss_fn(gradient_model(split.train_batches[0]), split.train_batches[0])
+        gradient_loss = gradient_loss_fn(
+            gradient_model(split.train_batches[0]),
+            split.train_batches[0],
+        )
         gradient_loss.backward()
         gradients = [parameter.grad for parameter in gradient_model.parameters()]
         assert gradients and all(
@@ -412,16 +429,7 @@ def test_shared_neural_objective_adapter_covers_direction_ranking_and_multitask(
     objectives = (
         _direction_objective(),
         ObjectiveConfig(kind="ranking", horizons_minutes=(15,), loss="pairwise_rank"),
-        ObjectiveConfig(
-            kind="multitask",
-            horizons_minutes=(15,),
-            loss="composite",
-            task_weights={
-                "expected_return": 1.0,
-                "rank_score": 0.5,
-                "direction_probability": 0.25,
-            },
-        ),
+        _multitask_objective(),
     )
     for objective in objectives:
         loss = build_baseline_loss(objective, _TARGETS)(output, batch)
