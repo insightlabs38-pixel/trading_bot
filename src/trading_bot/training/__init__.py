@@ -25,6 +25,7 @@ from trading_bot.training.predictions import (
     write_prediction_artifact,
 )
 from trading_bot.training.trainer import (
+    GpuMemoryTelemetry,
     NonFiniteTrainingError,
     Trainer,
     TrainerError,
@@ -41,6 +42,7 @@ __all__ = [
     "CheckpointManager",
     "CheckpointRestore",
     "CheckpointResumeError",
+    "GpuMemoryTelemetry",
     "InferenceBenchmark",
     "ModelOutput",
     "NonFiniteTrainingError",
