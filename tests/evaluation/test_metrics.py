@@ -75,9 +75,15 @@ def test_robustness_dsr_pbo_and_factor_attribution() -> None:
     assert robust.seed_dispersion == pytest.approx(0.2)
 
     returns = [0.01, 0.005, -0.002, 0.008, 0.004, 0.006, -0.001, 0.009]
-    period_sharpe = sum(returns) / len(returns) / (
-        sum((value - sum(returns) / len(returns)) ** 2 for value in returns) / (len(returns) - 1)
-    ) ** 0.5
+    period_sharpe = (
+        sum(returns)
+        / len(returns)
+        / (
+            sum((value - sum(returns) / len(returns)) ** 2 for value in returns)
+            / (len(returns) - 1)
+        )
+        ** 0.5
+    )
     dsr = deflated_sharpe_ratio(
         returns,
         trial_period_sharpes=[period_sharpe - 0.2, period_sharpe - 0.1, period_sharpe],

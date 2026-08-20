@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Mapping, Sequence
 
 from trading_bot.evaluation.artifacts import PredictionDataset, ScoreField
 from trading_bot.evaluation.backtest import (
@@ -155,9 +155,7 @@ def evaluate_trial(
         pbo=pbo,
         factor_attribution=attribution,
         attempted_trial_count=(
-            len(inputs.trial_period_sharpes)
-            if inputs.trial_period_sharpes is not None
-            else 1
+            len(inputs.trial_period_sharpes) if inputs.trial_period_sharpes is not None else 1
         ),
     )
 

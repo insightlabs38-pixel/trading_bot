@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, Mapping
+from typing import Literal
 
 Side = Literal["buy", "sell"]
 OrderType = Literal["market", "limit"]
@@ -171,15 +172,18 @@ class BacktestStep:
             "one_way_turnover",
         ):
             _require_finite(name, getattr(self, name))
-        if min(
-            self.fee_cost,
-            self.spread_cost,
-            self.slippage_cost,
-            self.impact_cost,
-            self.total_cost,
-            self.gross_traded_weight,
-            self.one_way_turnover,
-        ) < 0:
+        if (
+            min(
+                self.fee_cost,
+                self.spread_cost,
+                self.slippage_cost,
+                self.impact_cost,
+                self.total_cost,
+                self.gross_traded_weight,
+                self.one_way_turnover,
+            )
+            < 0
+        ):
             raise ValueError("costs and turnover must be non-negative")
         if self.trade_count < 0:
             raise ValueError("trade_count must be non-negative")

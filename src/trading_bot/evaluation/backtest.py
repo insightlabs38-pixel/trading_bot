@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Sequence
 
 from trading_bot.evaluation.contracts import (
     BacktestStep,
@@ -79,8 +79,7 @@ def run_backtest(
         rows = grouped[timestamp]
         all_assets = sorted(set(previous_weights) | set(rows))
         gross_return = sum(
-            rows[asset_id].weight * rows[asset_id].realized_return
-            for asset_id in rows
+            rows[asset_id].weight * rows[asset_id].realized_return for asset_id in rows
         )
         fee_cost = 0.0
         spread_cost = 0.0
@@ -104,11 +103,7 @@ def run_backtest(
             impact_bps = _component_bps(row, "impact_bps", assumptions.impact_bps)
             fee_cost += absolute_delta * fee_bps / 10_000.0 * cost_multiplier
             spread_cost += (
-                absolute_delta
-                * spread_bps
-                / 10_000.0
-                * cost_multiplier
-                * spread_multiplier
+                absolute_delta * spread_bps / 10_000.0 * cost_multiplier * spread_multiplier
             )
             slippage_cost += absolute_delta * slippage_bps / 10_000.0 * cost_multiplier
             impact_cost += absolute_delta * impact_bps / 10_000.0 * cost_multiplier

@@ -7,9 +7,10 @@ import json
 import os
 import shutil
 import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from trading_bot.evaluation.leaderboard import LeaderboardRow, TrialEvaluation
 
@@ -97,9 +98,7 @@ def verify_evaluation_report(path: str | Path) -> dict[str, Any]:
     root = Path(path)
     try:
         manifest_bytes = (root / "manifest.json").read_bytes()
-        expected_manifest_sha = (root / "manifest.sha256").read_text(
-            encoding="ascii"
-        ).strip()
+        expected_manifest_sha = (root / "manifest.sha256").read_text(encoding="ascii").strip()
         manifest = json.loads(manifest_bytes)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise EvaluationReportError("invalid evaluation report manifest") from exc

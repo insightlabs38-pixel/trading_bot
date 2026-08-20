@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from trading_bot.evaluation.contracts import Fill, Order, Quote, Side
 
@@ -39,7 +39,9 @@ def implementation_shortfall_bps(
     return sign * (execution_price - decision_price) / decision_price * 10_000.0
 
 
-def summarize_implementation_shortfall(values_bps: Sequence[float]) -> ImplementationShortfallMetrics:
+def summarize_implementation_shortfall(
+    values_bps: Sequence[float],
+) -> ImplementationShortfallMetrics:
     if not values_bps:
         raise ValueError("implementation-shortfall summary requires observations")
     values = sorted(float(value) for value in values_bps)
@@ -90,7 +92,7 @@ def simulate_l1_order(
     """
     if not math.isfinite(latency_seconds) or latency_seconds < 0:
         raise ValueError("latency_seconds must be finite and non-negative")
-    eligible_timestamp = order.decision_timestamp_ns + int(round(latency_seconds * 1_000_000_000))
+    eligible_timestamp = order.decision_timestamp_ns + round(latency_seconds * 1_000_000_000)
     ordered_quotes = sorted(quotes, key=lambda quote: quote.timestamp_ns)
     if any(
         ordered_quotes[index].timestamp_ns == ordered_quotes[index - 1].timestamp_ns

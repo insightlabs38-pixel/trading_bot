@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Mapping, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -256,11 +256,7 @@ def deflated_sharpe_ratio(
     denominator_term = 1.0 - skewness * observed + ((kurtosis - 1.0) / 4.0) * observed**2
     if denominator_term <= 0:
         raise ValueError("DSR denominator is not positive")
-    statistic = (
-        (observed - benchmark)
-        * math.sqrt(len(values) - 1)
-        / math.sqrt(denominator_term)
-    )
+    statistic = (observed - benchmark) * math.sqrt(len(values) - 1) / math.sqrt(denominator_term)
     probability = statistics.NormalDist().cdf(statistic)
     return DeflatedSharpeResult(
         probability=probability,
@@ -292,7 +288,10 @@ def probability_of_backtest_overfitting(
     if not bool(np.isfinite(matrix).all()):
         raise ValueError("PBO returns must be finite")
 
-    blocks = [np.asarray(block, dtype=np.int64) for block in np.array_split(np.arange(periods), split_count)]
+    blocks = [
+        np.asarray(block, dtype=np.int64)
+        for block in np.array_split(np.arange(periods), split_count)
+    ]
     half = split_count // 2
     logits: list[float] = []
     for train_blocks in combinations(range(split_count), half):
@@ -483,10 +482,9 @@ def _expected_maximum_sharpe(trial_sharpes: Sequence[float]) -> float:
     euler_gamma = 0.5772156649015329
     first_probability = min(max(1.0 - 1.0 / count, 1e-12), 1.0 - 1e-12)
     second_probability = min(max(1.0 - 1.0 / (count * math.e), 1e-12), 1.0 - 1e-12)
-    expected_standard_max = (
-        (1.0 - euler_gamma) * normal.inv_cdf(first_probability)
-        + euler_gamma * normal.inv_cdf(second_probability)
-    )
+    expected_standard_max = (1.0 - euler_gamma) * normal.inv_cdf(
+        first_probability
+    ) + euler_gamma * normal.inv_cdf(second_probability)
     return statistics.fmean(trial_sharpes) + sigma * expected_standard_max
 
 

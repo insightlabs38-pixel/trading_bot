@@ -5,10 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Literal, Mapping, cast
+from typing import Any, Literal, cast
 
 from trading_bot.evaluation.contracts import PredictionPoint
 
@@ -113,7 +114,11 @@ def read_prediction_artifact(path: str | Path) -> PredictionDataset:
     for index in range(count):
         asset_id = columns["asset_id"][index]
         timestamp_ns = columns["timestamp_ns"][index]
-        if not isinstance(asset_id, str) or not asset_id.strip() or not isinstance(timestamp_ns, int):
+        if (
+            not isinstance(asset_id, str)
+            or not asset_id.strip()
+            or not isinstance(timestamp_ns, int)
+        ):
             raise SavedPredictionError("invalid prediction identity columns")
         identity = (asset_id, timestamp_ns)
         if identity in identities:
@@ -219,7 +224,10 @@ def _validate_table(table: Any, manifest: dict[str, Any], path: Path) -> None:
         "uncertainty",
         "quantiles",
     ]
-    if list(table.column_names) != expected_columns or int(table.num_rows) != manifest["record_count"]:
+    if (
+        list(table.column_names) != expected_columns
+        or int(table.num_rows) != manifest["record_count"]
+    ):
         raise SavedPredictionError("prediction Parquet shape/schema does not match manifest")
     metadata = table.schema.metadata or {}
     expected_metadata = {
