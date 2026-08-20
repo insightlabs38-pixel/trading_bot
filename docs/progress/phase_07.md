@@ -103,19 +103,21 @@ The official CPU-only XGBoost distribution is used so standard CPU CI does not i
 
 ## CPU verification evidence
 
-Permanent read-only GitHub Actions run **32424578953** on Python **3.12.3** verified the complete implementation before tracker reconciliation:
+Final permanent read-only GitHub Actions run **32429468464** / job **96618012374** verified the exact reconciled PR head `549c16b8dbdf99c9b2d23b0cbcbd8b97be20b05f` on Python **3.12.3**.
+
+The workflow checked synthetic merge ref `a24bac3433067f985054e441bd7b35b7524312c1`, merging that exact head into base `c7677c47441f922d0f59569526650e012ceaaa62`.
 
 ```text
 uv lock --check: pass
 baseline-cpu locked sync: pass (73 locked packages)
 Ruff: pass
-formatting: 104 files formatted
+formatting: 105 files already formatted
 mypy: success, no issues in 55 source files
 compileall: pass
-pytest: 268 passed, 1 skipped
+pytest: 268 passed, 1 skipped in 15.91s
 ```
 
-The single skip remains the existing opt-in Phase 2 real-S3 provider gate and is unrelated to Phase 7. The final exact-head run after tracker reconciliation is required to close the branch/merge workflow but does not change the model-family acceptance semantics above.
+The single skip remains the existing opt-in Phase 2 real-S3 provider gate and is unrelated to Phase 7. PR #16 was then merged with standard merge commit `100f1468cb8c6fa0fcfe9a818fefbdb53de20ddf`. The actual merge commit has no file delta from the CI-tested synthetic merge tree.
 
 ## Phase 7 status
 
