@@ -51,7 +51,9 @@ def _return_loss(
     loss: str,
     targets: BaselineTargetNames,
 ) -> Tensor:
-    prediction = _scalar_head(output.require("expected_return"), batch.batch_size, "expected_return")
+    prediction = _scalar_head(
+        output.require("expected_return"), batch.batch_size, "expected_return"
+    )
     target = _scalar_target(batch, targets.return_target)
     if loss == "huber":
         return F.smooth_l1_loss(prediction, target)
