@@ -45,7 +45,7 @@ class BaselineMLPModel(TradingModel):
     def forward(self, batch: TrainingBatch) -> ModelOutput:
         sequence = _sequence_features(batch, expected_features=self.input_features)
         hidden = self.encoder(sequence).mean(dim=1)
-        return self.heads(hidden)
+        return self.heads.forward(hidden)
 
 
 class GRUReturnModel(TradingModel):
@@ -61,7 +61,7 @@ class GRUReturnModel(TradingModel):
     def forward(self, batch: TrainingBatch) -> ModelOutput:
         sequence = _sequence_features(batch, expected_features=self.input_features)
         _, hidden = self.gru(sequence)
-        return self.heads(hidden[-1])
+        return self.heads.forward(hidden[-1])
 
 
 class LSTMReturnModel(TradingModel):
@@ -77,7 +77,7 @@ class LSTMReturnModel(TradingModel):
     def forward(self, batch: TrainingBatch) -> ModelOutput:
         sequence = _sequence_features(batch, expected_features=self.input_features)
         _, (hidden, _) = self.lstm(sequence)
-        return self.heads(hidden[-1])
+        return self.heads.forward(hidden[-1])
 
 
 class TCNReturnModel(TradingModel):
@@ -105,7 +105,7 @@ class TCNReturnModel(TradingModel):
         hidden = sequence.transpose(1, 2)
         hidden = F.gelu(self.conv1(F.pad(hidden, (self.kernel_size - 1, 0))))
         hidden = F.gelu(self.conv2(F.pad(hidden, (self.kernel_size - 1, 0))))
-        return self.heads(hidden[:, :, -1])
+        return self.heads.forward(hidden[:, :, -1])
 
 
 class CausalTransformerReturnModel(TradingModel):
@@ -156,7 +156,7 @@ class CausalTransformerReturnModel(TradingModel):
             diagonal=1,
         )
         hidden = self.encoder(hidden, mask=causal_mask)
-        return self.heads(self.final_norm(hidden[:, -1]))
+        return self.heads.forward(self.final_norm(hidden[:, -1]))
 
 
 def _sequence_features(batch: TrainingBatch, *, expected_features: int) -> Tensor:
