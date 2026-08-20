@@ -33,6 +33,7 @@ class BaselineMLPModel(TradingModel):
     def __init__(self, input_features: int, hidden_features: int = 32) -> None:
         super().__init__()
         _validate_widths(input_features, hidden_features)
+        self.input_features = input_features
         self.encoder = nn.Sequential(
             nn.Linear(input_features, hidden_features),
             nn.GELU(),
@@ -42,7 +43,7 @@ class BaselineMLPModel(TradingModel):
         self.heads = _BaselineHeads(hidden_features)
 
     def forward(self, batch: TrainingBatch) -> ModelOutput:
-        sequence = _sequence_features(batch, expected_features=self.encoder[0].in_features)
+        sequence = _sequence_features(batch, expected_features=self.input_features)
         hidden = self.encoder(sequence).mean(dim=1)
         return self.heads(hidden)
 
