@@ -21,16 +21,33 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out exact workflow revision
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            fetch_ref="refs/pull/${PR_NUMBER}/merge"
+          else
+            fetch_ref="$GITHUB_SHA"
+          fi
+          git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
+            fetch --no-tags --depth=1 origin "$fetch_ref"
+          git checkout --detach FETCH_HEAD
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
+      - name: Verify system Python 3.12
+        run: |
+          python3.12 --version
+          python3.12 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
 
-      - name: Install pinned uv CLI
-        run: python -m pip install --disable-pip-version-check "uv>=0.10,<0.11"
+      - name: Bootstrap pinned uv CLI
+        run: |
+          python3.12 -m venv /tmp/trading-bot-uv
+          /tmp/trading-bot-uv/bin/python -m pip install --disable-pip-version-check "uv>=0.10,<0.11"
+          echo "/tmp/trading-bot-uv/bin" >> "$GITHUB_PATH"
 
       - name: Resolve CPU dependency set
         run: uv lock
