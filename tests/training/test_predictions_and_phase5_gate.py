@@ -26,10 +26,13 @@ from trading_bot.training.contracts import TradingModel
 def _batches() -> tuple[TrainingBatch, ...]:
     batches = []
     for batch_index in range(4):
-        features = torch.tensor(
-            [[1.0, 2.0], [2.0, 1.0], [3.0, 1.0], [1.0, 3.0]],
-            dtype=torch.float32,
-        ) + batch_index * 0.05
+        features = (
+            torch.tensor(
+                [[1.0, 2.0], [2.0, 1.0], [3.0, 1.0], [1.0, 3.0]],
+                dtype=torch.float32,
+            )
+            + batch_index * 0.05
+        )
         batches.append(
             TrainingBatch(
                 features=features,
