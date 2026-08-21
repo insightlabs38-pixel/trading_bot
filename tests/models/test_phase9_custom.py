@@ -102,9 +102,7 @@ def _make_split() -> BaselineSplit:
         )
         features = torch.stack((feature_0, feature_1, feature_2), dim=-1)
         future_return = (
-            0.019 * feature_0[:, -1]
-            - 0.012 * feature_1[:, -1]
-            + 0.006 * feature_2.mean(dim=1)
+            0.019 * feature_0[:, -1] - 0.012 * feature_1[:, -1] + 0.006 * feature_2.mean(dim=1)
         )
         timestamp = base_timestamp + batch_index * 86_400_000_000_000
         batches.append(
@@ -513,9 +511,7 @@ def test_small_medium_large_custom_specs_scale_and_keep_common_heads(
 def test_all_cpu_reference_custom_families_complete_common_gate(
     phase9_gate: Phase9GateResult,
 ) -> None:
-    assert {result.trial_id for result in phase9_gate.families} == set(
-        CORE_CUSTOM_ARCHITECTURES
-    )
+    assert {result.trial_id for result in phase9_gate.families} == set(CORE_CUSTOM_ARCHITECTURES)
     assert all(result.parameter_count > 0 for result in phase9_gate.families)
     assert all(result.state_bytes > 0 for result in phase9_gate.families)
     assert all(result.samples_per_second > 0 for result in phase9_gate.families)
