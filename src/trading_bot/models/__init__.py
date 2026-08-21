@@ -1,5 +1,24 @@
-"""Model families and common baseline implementations."""
+"""Model families and common research implementations."""
 
+from trading_bot.models.advanced import (
+    CORE_ADVANCED_ARCHITECTURES,
+    AdvancedArchitecture,
+    AdvancedModelProfile,
+    AdvancedModelSpec,
+    AdvancedScale,
+    FoundationBackbone,
+    FoundationModelIdentity,
+    FrozenFoundationAdapter,
+    ITransformerReturnModel,
+    MambaReferenceReturnModel,
+    PatchTSTReturnModel,
+    TemporalCrossSectionalTransformerReturnModel,
+    TemporalGraphReturnModel,
+    VSNLSTMReturnModel,
+    advanced_model_spec,
+    build_advanced_model,
+    profile_advanced_model,
+)
 from trading_bot.models.baseline_checkpoint import (
     ClassicalCheckpointError,
     ClassicalCheckpointIdentity,
@@ -36,6 +55,11 @@ from trading_bot.models.toy import (
 )
 
 __all__ = [
+    "CORE_ADVANCED_ARCHITECTURES",
+    "AdvancedArchitecture",
+    "AdvancedModelProfile",
+    "AdvancedModelSpec",
+    "AdvancedScale",
     "BaselineComplexity",
     "BaselineInferenceBenchmark",
     "BaselineMLPModel",
@@ -47,17 +71,29 @@ __all__ = [
     "ClassicalCheckpointError",
     "ClassicalCheckpointIdentity",
     "ElasticNetBaseline",
+    "FoundationBackbone",
+    "FoundationModelIdentity",
+    "FrozenFoundationAdapter",
     "GRUReturnModel",
+    "ITransformerReturnModel",
     "LSTMReturnModel",
     "LightGBMBaseline",
     "LinearReturnModel",
     "LogisticDirectionBaseline",
     "MLPReturnModel",
+    "MambaReferenceReturnModel",
+    "PatchTSTReturnModel",
     "ResidualGatedReturnModel",
     "RidgeBaseline",
     "TCNReturnModel",
+    "TemporalCrossSectionalTransformerReturnModel",
+    "TemporalGraphReturnModel",
+    "VSNLSTMReturnModel",
     "XGBoostBaseline",
+    "advanced_model_spec",
+    "build_advanced_model",
     "build_baseline_loss",
+    "profile_advanced_model",
     "restore_classical_checkpoint",
     "save_classical_checkpoint",
 ]
