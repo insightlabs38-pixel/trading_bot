@@ -1,7 +1,7 @@
 """Validated, version-controlled experiment registry and search-space manifest.
 
 Phase 10 deliberately keeps this module free of model/training imports beyond the
-frozen configuration schemas.  The future campaign scheduler can therefore load
+frozen configuration schemas. The future campaign scheduler can therefore load
 and inspect the experiment plan without importing PyTorch or CUDA model code.
 """
 
@@ -13,7 +13,14 @@ from pathlib import Path
 from typing import Literal, cast
 
 import yaml  # type: ignore[import-untyped]
-from pydantic import Field, JsonValue, PositiveFloat, PositiveInt, field_validator, model_validator
+from pydantic import (
+    Field,
+    JsonValue,
+    PositiveFloat,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
 from trading_bot.config.base import FrozenConfigModel
 from trading_bot.config.schemas import ModelHead, ObjectiveConfig
@@ -56,6 +63,14 @@ _OBJECTIVE_LOSSES: dict[str, frozenset[str]] = {
     "ranking": frozenset({"pairwise_rank"}),
     "multitask": frozenset({"composite"}),
     "distributional": frozenset({"quantile"}),
+}
+_HEAD_TASK_KEYS: dict[ModelHead, str] = {
+    "return": "expected_return",
+    "rank": "rank_score",
+    "direction": "direction_probability",
+    "volatility": "volatility",
+    "uncertainty": "uncertainty",
+    "quantiles": "quantiles",
 }
 
 
@@ -150,22 +165,9 @@ class ObjectiveVariant(FrozenConfigModel):
                 f"loss {self.objective.loss!r} in the campaign manifest"
             )
         if self.objective.kind == "multitask":
-            required_weight_keys = {
-                "expected_return" if head == "return" else f"{head}_probability"
-                if head == "direction"
-                else f"{head}_score"
-                if head == "rank"
-                else head
-                for head in self.required_heads
-            }
-            aliases = {
-                "volatility": "volatility",
-                "uncertainty": "uncertainty",
-                "quantiles": "quantiles",
-            }
-            normalized = {aliases.get(key, key) for key in required_weight_keys}
-            if not normalized.issubset(self.objective.task_weights):
-                missing = sorted(normalized - set(self.objective.task_weights))
+            required = {_HEAD_TASK_KEYS[head] for head in self.required_heads}
+            missing = sorted(required - set(self.objective.task_weights))
+            if missing:
                 raise ValueError(f"multitask objective is missing task weights: {missing}")
         return self
 
@@ -303,7 +305,11 @@ class CampaignSearchManifest(FrozenConfigModel):
         objective_ids = [item.objective_id for item in self.objectives]
         if not objective_ids or len(set(objective_ids)) != len(objective_ids):
             raise ValueError("objective IDs must be non-empty and unique")
+        objective_map = {item.objective_id: item for item in self.objectives}
         objective_id_set = set(objective_ids)
+        enabled_objective_ids = {
+            item.objective_id for item in self.objectives if item.selection == "enabled"
+        }
         for architecture in self.architectures:
             unknown = set(architecture.objective_ids) - objective_id_set
             if unknown:
@@ -311,7 +317,12 @@ class CampaignSearchManifest(FrozenConfigModel):
                     f"architecture {architecture.family!r} references unknown objectives: "
                     f"{sorted(unknown)}"
                 )
-        objective_map = {item.objective_id: item for item in self.objectives}
+            not_launchable = set(architecture.objective_ids) - enabled_objective_ids
+            if not_launchable:
+                raise ValueError(
+                    f"architecture {architecture.family!r} references objectives that are "
+                    f"not selected for launch: {sorted(not_launchable)}"
+                )
         screening = objective_map.get(self.screening_objective_id)
         if screening is None or screening.selection != "enabled":
             raise ValueError("screening objective must exist and be enabled")
@@ -373,7 +384,9 @@ def load_campaign_search_manifest(path: str | Path) -> CampaignSearchManifest:
     try:
         raw = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     except OSError as exc:
-        raise CampaignManifestError(f"unable to read campaign manifest {manifest_path}: {exc}") from exc
+        raise CampaignManifestError(
+            f"unable to read campaign manifest {manifest_path}: {exc}"
+        ) from exc
     except yaml.YAMLError as exc:
         raise CampaignManifestError(f"invalid campaign YAML in {manifest_path}: {exc}") from exc
     if not isinstance(raw, dict):
@@ -402,28 +415,40 @@ def campaign_manifest_sha256(manifest: CampaignSearchManifest) -> str:
 
 def enumerate_campaign(manifest: CampaignSearchManifest) -> CampaignEnumeration:
     """Summarize the entire intended search space without expanding every trial."""
-    mandatory = tuple(item.family for item in manifest.architectures if item.pool == "mandatory")
+    mandatory = tuple(
+        item.family for item in manifest.architectures if item.pool == "mandatory"
+    )
     optional = tuple(item.family for item in manifest.architectures if item.pool == "optional")
     searchable = tuple(item.family for item in manifest.architectures if item.searchable)
     enabled_objectives = tuple(
         item.objective_id for item in manifest.objectives if item.selection == "enabled"
     )
     planned_objectives = tuple(
-        item.objective_id for item in manifest.objectives if item.selection == "planned_not_selected"
+        item.objective_id
+        for item in manifest.objectives
+        if item.selection == "planned_not_selected"
     )
     scale_count = sum(len(item.scales) for item in manifest.architectures)
 
-    screening_scales = sum(
-        len(item.scales)
-        for item in manifest.architectures
-        if item.searchable and manifest.screening_objective_id in item.objective_ids
-    )
     search = manifest.search
-    screening_points = screening_scales
-    screening_points *= len(search.learning_rates)
-    screening_points *= len(search.weight_decays)
-    screening_points *= len(search.context_lengths)
-    screening_points *= len(search.batch_constraints)
+    screening_points = 0
+    for architecture in manifest.architectures:
+        if not architecture.searchable:
+            continue
+        if manifest.screening_objective_id not in architecture.objective_ids:
+            continue
+        family_points = len(architecture.scales)
+        if "learning_rate" in architecture.search_axes:
+            family_points *= len(search.learning_rates)
+        if "weight_decay" in architecture.search_axes:
+            family_points *= len(search.weight_decays)
+        if "dropout" in architecture.search_axes:
+            family_points *= len(search.dropouts)
+        if "context_length" in architecture.search_axes:
+            family_points *= len(search.context_lengths)
+        if "batch" in architecture.search_axes:
+            family_points *= len(search.batch_constraints)
+        screening_points += family_points
 
     budget_map = {budget.stage: budget for budget in manifest.budgets}
     calibration_count = int(budget_map["calibration"].target_configurations or 0)
