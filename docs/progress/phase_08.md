@@ -2,7 +2,7 @@
 
 Last updated: **2026-08-20**
 
-Status: **IN PROGRESS — CPU/reference core architectures implemented; final CI and external foundation/GPU acceptance pending**
+Status: **IN PROGRESS — CPU/reference core gate passed; selected foundation checkpoint and GPU/H200 acceptance pending**
 
 `IMPLEMENTATION_PLAN.md` remains the authoritative checklist. This record distinguishes the CPU-reference architecture gate from external pretrained-checkpoint selection and GPU/H200 performance acceptance.
 
@@ -77,9 +77,24 @@ The Phase 8 CPU test fixture uses one deterministic cross-sectional split. For e
 8. applies one deterministic market-neutral rank portfolio rule;
 9. produces one canonical cost-aware leaderboard and checksummed report.
 
+## CPU verification evidence
+
+Permanent read-only GitHub Actions run **32433083576** / job **96628678153** verified the core implementation before authoritative tracker reconciliation. It checked the exact PR head `d286551c5d0815ce22b26f24d72fa262faaa5871` through synthetic merge ref `7fb8abc` on Python **3.12.3**.
+
+```text
+uv lock --check: pass
+baseline-cpu locked sync: pass (73 locked packages)
+Ruff: pass
+formatting: 108 files already formatted
+mypy: success, no issues in 56 source files
+compileall: pass
+pytest: 279 passed, 1 skipped in 13.80s
+```
+
+The single skip remains the existing opt-in Phase 2 real-S3 provider gate and is unrelated to Phase 8. A final read-only run after tracker reconciliation will close the CPU branch gate without changing the architecture acceptance semantics above.
+
 ## Remaining Phase 8 acceptance
 
-- final read-only Python 3.12 CI on the reconciled branch head;
 - selected real pretrained time-series foundation-model checkpoint/reference evaluation;
 - representative GPU/H200 memory and throughput validation for scale decisions.
 
