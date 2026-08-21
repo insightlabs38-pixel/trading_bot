@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import torch
 from torch import Tensor, nn
@@ -344,7 +344,7 @@ class _SelectiveStateSpaceBlock(nn.Module):
             value = value * torch.sigmoid(gate[:, index])
             outputs.append(value)
         encoded = self.out_projection(torch.stack(outputs, dim=1))
-        return self.norm(sequence + encoded)
+        return cast(Tensor, self.norm(sequence + encoded))
 
 
 class MambaReferenceReturnModel(TradingModel):
