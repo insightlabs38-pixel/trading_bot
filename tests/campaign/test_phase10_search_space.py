@@ -6,6 +6,7 @@ import copy
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 import torch
@@ -21,9 +22,14 @@ from trading_bot.campaign import (
     objective_by_id,
     scale_parameters,
 )
+from trading_bot.campaign.search_space import ScalePreset
 from trading_bot.models import (
+    AdvancedArchitecture,
+    AdvancedScale,
     BaselineMLPModel,
     CausalTransformerReturnModel,
+    CustomArchitecture,
+    CustomScale,
     GRUReturnModel,
     LSTMReturnModel,
     TCNReturnModel,
@@ -59,7 +65,10 @@ def test_frozen_manifest_enumerates_documented_campaign() -> None:
     assert manifest.screening_objective_id == "excess_huber_15m"
     assert len(manifest.architectures) == 19
     assert len(enumeration.mandatory_families) == 17
-    assert set(enumeration.optional_families) == {"logistic_direction", "foundation_adapter"}
+    assert set(enumeration.optional_families) == {
+        "logistic_direction",
+        "foundation_adapter",
+    }
     assert len(enumeration.searchable_families) == 13
     assert enumeration.canonical_scale_count == 45
     assert enumeration.screening_candidate_points == 3159
@@ -92,7 +101,8 @@ def test_manifest_hash_and_canonical_json_are_stable() -> None:
 def test_campaign_loader_does_not_import_torch() -> None:
     command = (
         "import sys; import trading_bot.campaign; "
-        "assert 'torch' not in sys.modules, sorted(name for name in sys.modules if name.startswith('torch'))"
+        "loaded=sorted(name for name in sys.modules if name.startswith('torch')); "
+        "assert not loaded, loaded"
     )
     completed = subprocess.run(
         [sys.executable, "-c", command],
@@ -111,12 +121,16 @@ def test_advanced_yaml_presets_match_phase8_reference(
 ) -> None:
     manifest = _manifest()
     reference = advanced_model_spec(
-        architecture,  # type: ignore[arg-type]
-        scale,  # type: ignore[arg-type]
+        cast(AdvancedArchitecture, architecture),
+        cast(AdvancedScale, scale),
         input_features=3,
         max_sequence_length=64,
     )
-    parameters = scale_parameters(manifest, architecture, scale)  # type: ignore[arg-type]
+    parameters = scale_parameters(
+        manifest,
+        architecture,
+        cast(ScalePreset, scale),
+    )
     for name, expected in parameters.items():
         assert getattr(reference, name) == expected
 
@@ -129,12 +143,16 @@ def test_custom_yaml_presets_match_phase9_reference(
 ) -> None:
     manifest = _manifest()
     reference = custom_model_spec(
-        architecture,  # type: ignore[arg-type]
-        scale,  # type: ignore[arg-type]
+        cast(CustomArchitecture, architecture),
+        cast(CustomScale, scale),
         input_features=3,
         max_sequence_length=64,
     )
-    parameters = scale_parameters(manifest, architecture, scale)  # type: ignore[arg-type]
+    parameters = scale_parameters(
+        manifest,
+        architecture,
+        cast(ScalePreset, scale),
+    )
     for name, expected in parameters.items():
         assert getattr(reference, name) == expected
 
@@ -164,20 +182,31 @@ def _baseline_model(family: str, parameters: dict[str, object]) -> torch.nn.Modu
     raise AssertionError(f"unexpected baseline family {family!r}")
 
 
-@pytest.mark.parametrize("family", ("mlp", "gru", "lstm", "tcn", "causal_transformer"))
+@pytest.mark.parametrize(
+    "family",
+    ("mlp", "gru", "lstm", "tcn", "causal_transformer"),
+)
 @pytest.mark.parametrize("scale", _SCALES)
 def test_neural_baseline_canonical_scales_construct_and_forward(
     family: str,
     scale: str,
 ) -> None:
     manifest = _manifest()
-    parameters = scale_parameters(manifest, family, scale)  # type: ignore[arg-type]
+    parameters = scale_parameters(
+        manifest,
+        family,
+        cast(ScalePreset, scale),
+    )
     model = _baseline_model(family, dict(parameters))
     batch = TrainingBatch(
         features=torch.zeros((4, 8, 3)),
         targets={"return_15m": torch.zeros(4)},
         asset_ids=("a", "b", "c", "d"),
-        timestamps_ns=torch.full((4,), 1_700_000_000_000_000_000, dtype=torch.int64),
+        timestamps_ns=torch.full(
+            (4,),
+            1_700_000_000_000_000_000,
+            dtype=torch.int64,
+        ),
     )
     output = model(batch)
     assert output.expected_return is not None
@@ -192,23 +221,27 @@ def test_planned_objectives_are_defined_but_not_launchable() -> None:
         "multi_horizon_huber_15_30m",
         "distributional_quantile_15m",
     }
-    assert {objective.objective_id for objective in manifest.objectives if objective.selection != "enabled"} == planned
+    actual_planned = {
+        objective.objective_id
+        for objective in manifest.objectives
+        if objective.selection != "enabled"
+    }
+    assert actual_planned == planned
     registered_for_launch = {
         objective_id
         for architecture in manifest.architectures
         for objective_id in architecture.objective_ids
     }
     assert planned.isdisjoint(registered_for_launch)
-    assert objective_by_id(manifest, "multitask_return_rank_vol_direction_15m").objective.task_weights[
-        "volatility"
-    ] == 0.25
-    assert objective_by_id(manifest, "multi_horizon_huber_15_30m").objective.horizons_minutes == (
-        15,
-        30,
+    full_multitask = objective_by_id(
+        manifest,
+        "multitask_return_rank_vol_direction_15m",
     )
-    assert objective_by_id(manifest, "distributional_quantile_15m").required_heads == (
-        "quantiles",
-    )
+    assert full_multitask.objective.task_weights["volatility"] == 0.25
+    multi_horizon = objective_by_id(manifest, "multi_horizon_huber_15_30m")
+    assert multi_horizon.objective.horizons_minutes == (15, 30)
+    distributional = objective_by_id(manifest, "distributional_quantile_15m")
+    assert distributional.required_heads == ("quantiles",)
 
 
 def test_search_ranges_and_budget_rungs_are_preregistered() -> None:
