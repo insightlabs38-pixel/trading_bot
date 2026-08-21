@@ -1,7 +1,9 @@
 name: CPU CI
 
 on:
-  pull_request:
+  push:
+    branches:
+      - phase8-cpu-advanced-models
   workflow_dispatch:
 
 permissions:
@@ -14,27 +16,24 @@ concurrency:
 jobs:
   reconcile:
     name: Reconcile Phase 8 tracker
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Check out PR head branch
+      - name: Check out Phase 8 branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
         run: |
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            fetch --no-tags --depth=1 origin "refs/heads/${HEAD_REF}"
-          git checkout -B "$HEAD_REF" FETCH_HEAD
+            fetch --no-tags --depth=1 origin "refs/heads/phase8-cpu-advanced-models"
+          git checkout -B phase8-cpu-advanced-models FETCH_HEAD
 
       - name: Reconcile authoritative Phase 8 tracker
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -109,4 +108,4 @@ Every core architecture can complete a screening-budget run using the same train
           git commit -m "Reconcile Phase 8 CPU reference tracker"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            push origin "HEAD:refs/heads/${HEAD_REF}"
+            push origin "HEAD:refs/heads/phase8-cpu-advanced-models"
