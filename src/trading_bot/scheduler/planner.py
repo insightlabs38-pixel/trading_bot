@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import hashlib
-import itertools
 import json
 from collections.abc import Iterable
 
 from pydantic import JsonValue
 
-from trading_bot.campaign.search_space import CampaignSearchManifest, ExperimentPool
+from trading_bot.campaign.search_space import (
+    BatchConstraint,
+    CampaignSearchManifest,
+    ExperimentPool,
+)
 from trading_bot.scheduler.types import LaunchPriority, TrialSpec
 
 
@@ -83,38 +86,50 @@ def _family_candidates(
 ) -> Iterable[dict[str, JsonValue]]:
     architecture = next(item for item in manifest.architectures if item.family == family)
     search = manifest.search
-
-    def values(axis: str, candidates: tuple[object, ...]) -> tuple[object | None, ...]:
-        return candidates if axis in architecture.search_axes else (None,)
-
-    learning_rates = values("learning_rate", tuple(search.learning_rates))
-    weight_decays = values("weight_decay", tuple(search.weight_decays))
-    dropouts = values("dropout", tuple(search.dropouts))
-    context_lengths = values("context_length", tuple(search.context_lengths))
-    batch_constraints = values("batch", tuple(search.batch_constraints))
+    learning_rates: tuple[float | None, ...] = (
+        tuple(float(item) for item in search.learning_rates)
+        if "learning_rate" in architecture.search_axes
+        else (None,)
+    )
+    weight_decays: tuple[float | None, ...] = (
+        tuple(float(item) for item in search.weight_decays)
+        if "weight_decay" in architecture.search_axes
+        else (None,)
+    )
+    dropouts: tuple[float | None, ...] = (
+        tuple(float(item) for item in search.dropouts)
+        if "dropout" in architecture.search_axes
+        else (None,)
+    )
+    context_lengths: tuple[int | None, ...] = (
+        tuple(int(item) for item in search.context_lengths)
+        if "context_length" in architecture.search_axes
+        else (None,)
+    )
+    batch_constraints: tuple[BatchConstraint | None, ...] = (
+        tuple(search.batch_constraints) if "batch" in architecture.search_axes else (None,)
+    )
 
     for scale in architecture.scales:
-        for learning_rate, weight_decay, dropout, context_length, batch in itertools.product(
-            learning_rates,
-            weight_decays,
-            dropouts,
-            context_lengths,
-            batch_constraints,
-        ):
-            config: dict[str, JsonValue] = {
-                "family": architecture.family,
-                "scale": scale.name,
-                "model_parameters": scale.parameters,
-                "objective_id": manifest.screening_objective_id,
-            }
-            if learning_rate is not None:
-                config["learning_rate"] = float(learning_rate)
-            if weight_decay is not None:
-                config["weight_decay"] = float(weight_decay)
-            if dropout is not None:
-                config["dropout"] = float(dropout)
-            if context_length is not None:
-                config["context_length"] = int(context_length)
-            if batch is not None:
-                config["batch"] = batch.model_dump(mode="json")
-            yield config
+        for learning_rate in learning_rates:
+            for weight_decay in weight_decays:
+                for dropout in dropouts:
+                    for context_length in context_lengths:
+                        for batch in batch_constraints:
+                            config: dict[str, JsonValue] = {
+                                "family": architecture.family,
+                                "scale": scale.name,
+                                "model_parameters": scale.parameters,
+                                "objective_id": manifest.screening_objective_id,
+                            }
+                            if learning_rate is not None:
+                                config["learning_rate"] = learning_rate
+                            if weight_decay is not None:
+                                config["weight_decay"] = weight_decay
+                            if dropout is not None:
+                                config["dropout"] = dropout
+                            if context_length is not None:
+                                config["context_length"] = context_length
+                            if batch is not None:
+                                config["batch"] = batch.model_dump(mode="json")
+                            yield config

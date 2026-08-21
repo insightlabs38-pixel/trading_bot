@@ -7,7 +7,7 @@ import sqlite3
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from trading_bot.scheduler.types import (
     CampaignState,
@@ -217,7 +217,7 @@ class CampaignDB:
         ).fetchone()
         if row is None:
             raise KeyError(f"unknown campaign {campaign_id!r}")
-        return row
+        return cast(sqlite3.Row, row)
 
     def campaign_state(self, campaign_id: str) -> CampaignState:
         return CampaignState(str(self.campaign_row(campaign_id)["state"]))
@@ -297,7 +297,7 @@ class CampaignDB:
         ).fetchone()
         if row is None:
             raise KeyError(f"unknown trial {trial_id!r}")
-        return row
+        return cast(sqlite3.Row, row)
 
     def trial_state(self, trial_id: str) -> TrialState:
         return TrialState(str(self.trial_row(trial_id)["state"]))
