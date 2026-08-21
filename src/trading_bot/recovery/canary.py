@@ -49,7 +49,10 @@ def run_cpu_golden_canary(
     }
 
     predictions = tuple(slope * value + intercept for value in xs)
-    mse = sum((actual - target) ** 2 for actual, target in zip(predictions, expected, strict=True)) / len(xs)
+    mse = sum(
+        (actual - target) ** 2
+        for actual, target in zip(predictions, expected, strict=True)
+    ) / len(xs)
 
     started = perf_counter()
     sink = 0.0
@@ -63,7 +66,10 @@ def run_cpu_golden_canary(
 
     with tempfile.TemporaryDirectory(prefix="trading-bot-golden-canary-") as directory:
         artifact = Path(directory) / "canary.json"
-        artifact.write_text(json.dumps(model, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+        artifact.write_text(
+            json.dumps(model, sort_keys=True, separators=(",", ":")),
+            encoding="utf-8",
+        )
         restored = json.loads(artifact.read_text(encoding="utf-8"))
         if restored != model:
             raise ValueError("golden canary save/load round-trip failed")
