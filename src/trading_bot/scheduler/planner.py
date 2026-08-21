@@ -7,7 +7,9 @@ import itertools
 import json
 from collections.abc import Iterable
 
-from trading_bot.campaign.search_space import CampaignSearchManifest
+from pydantic import JsonValue
+
+from trading_bot.campaign.search_space import CampaignSearchManifest, ExperimentPool
 from trading_bot.scheduler.types import LaunchPriority, TrialSpec
 
 
@@ -23,8 +25,8 @@ def build_screening_trial_specs(
     if budget.target_configurations is None:
         raise ValueError("screening budget must define target_configurations")
 
-    family_candidates: list[list[dict[str, object]]] = []
-    family_meta: list[tuple[str, str]] = []
+    family_candidates: list[list[dict[str, JsonValue]]] = []
+    family_meta: list[tuple[str, ExperimentPool]] = []
     for architecture in manifest.architectures:
         if not architecture.searchable:
             continue
@@ -39,7 +41,7 @@ def build_screening_trial_specs(
     if not family_candidates:
         raise ValueError("campaign contains no searchable screening families")
 
-    selected: list[tuple[str, str, dict[str, object]]] = []
+    selected: list[tuple[str, ExperimentPool, dict[str, JsonValue]]] = []
     cursor = 0
     while len(selected) < budget.target_configurations:
         made_progress = False
@@ -66,9 +68,7 @@ def build_screening_trial_specs(
                 stage="screening",
                 budget_fraction=budget.fraction_of_family_full_budget,
                 priority=(
-                    LaunchPriority.MANDATORY
-                    if pool == "mandatory"
-                    else LaunchPriority.OPTIONAL
+                    LaunchPriority.MANDATORY if pool == "mandatory" else LaunchPriority.OPTIONAL
                 ),
                 config=config,
                 fallback_runtime_seconds=fallback_runtime_seconds,
@@ -80,7 +80,7 @@ def build_screening_trial_specs(
 def _family_candidates(
     manifest: CampaignSearchManifest,
     family: str,
-) -> Iterable[dict[str, object]]:
+) -> Iterable[dict[str, JsonValue]]:
     architecture = next(item for item in manifest.architectures if item.family == family)
     search = manifest.search
 
@@ -101,7 +101,7 @@ def _family_candidates(
             context_lengths,
             batch_constraints,
         ):
-            config: dict[str, object] = {
+            config: dict[str, JsonValue] = {
                 "family": architecture.family,
                 "scale": scale.name,
                 "model_parameters": scale.parameters,

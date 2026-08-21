@@ -205,9 +205,7 @@ def run_compressed_campaign_simulation(
     if drain_decision.mode != DeadlineMode.DRAIN or drain_decision.allowed:
         raise RuntimeError("compressed simulation failed to enter deadline drain mode")
     controller.enter_drain()
-    interrupted = sum(
-        1 for row in db.rows("trials") if str(row["state"]) == "INTERRUPTED"
-    )
+    interrupted = sum(1 for row in db.rows("trials") if str(row["state"]) == "INTERRUPTED")
     controller.complete_campaign(unsynced_critical_bytes=0)
     snapshot = controller.snapshot(durable_backend, snapshot_key)
 

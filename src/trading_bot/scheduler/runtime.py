@@ -54,11 +54,7 @@ class RuntimeEstimator:
             math.ceil(self.policy.runtime_quantile * len(normalized_full_runtime)) - 1,
         )
         conservative_full = normalized_full_runtime[quantile_index]
-        return (
-            conservative_full
-            * spec.budget_fraction
-            * self.policy.runtime_safety_multiplier
-        )
+        return conservative_full * spec.budget_fraction * self.policy.runtime_safety_multiplier
 
 
 def dynamic_drain_reserve_seconds(
@@ -91,11 +87,14 @@ def deadline_mode(
     deadline_at: float,
     drain_reserve_seconds: float,
 ) -> DeadlineMode:
-    usable_hours = usable_seconds(
-        now=now,
-        deadline_at=deadline_at,
-        drain_reserve_seconds=drain_reserve_seconds,
-    ) / 3600.0
+    usable_hours = (
+        usable_seconds(
+            now=now,
+            deadline_at=deadline_at,
+            drain_reserve_seconds=drain_reserve_seconds,
+        )
+        / 3600.0
+    )
     thresholds = policy.deadline_thresholds
     if usable_hours >= thresholds.broad_exploration_min_usable_hours:
         return DeadlineMode.BROAD_EXPLORATION

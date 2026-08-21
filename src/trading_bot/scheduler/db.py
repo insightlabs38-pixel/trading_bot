@@ -314,9 +314,7 @@ class CampaignDB:
                 "priority": str(row["priority"]),
                 "config": json.loads(str(row["config_json"])),
                 "parent_trial_id": (
-                    str(row["parent_trial_id"])
-                    if row["parent_trial_id"] is not None
-                    else None
+                    str(row["parent_trial_id"]) if row["parent_trial_id"] is not None else None
                 ),
                 "root_trial_id": str(row["root_trial_id"]),
                 "attempt": int(row["attempt"]),
@@ -353,9 +351,7 @@ class CampaignDB:
             trial_id,
         )
 
-    def attach_worker(
-        self, trial_id: str, *, pid: int, stdout_path: str, stderr_path: str
-    ) -> None:
+    def attach_worker(self, trial_id: str, *, pid: int, stdout_path: str, stderr_path: str) -> None:
         self._connection.execute(
             "UPDATE trials SET worker_pid = ?, stdout_path = ?, stderr_path = ? WHERE trial_id = ?",
             (pid, stdout_path, stderr_path, trial_id),
@@ -450,9 +446,7 @@ class CampaignDB:
                     else None
                 ),
                 peak_vram_bytes=(
-                    int(row["peak_vram_bytes"])
-                    if row["peak_vram_bytes"] is not None
-                    else None
+                    int(row["peak_vram_bytes"]) if row["peak_vram_bytes"] is not None else None
                 ),
             )
             for row in rows
@@ -556,17 +550,11 @@ class CampaignDB:
         }
         if table not in allowed:
             raise ValueError(f"unsupported scheduler table {table!r}")
-        return tuple(
-            self._connection.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
-        )
+        return tuple(self._connection.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall())
 
-    def snapshot_to_storage(
-        self, backend: StorageBackend, key: str
-    ) -> StorageObjectMetadata:
+    def snapshot_to_storage(self, backend: StorageBackend, key: str) -> StorageObjectMetadata:
         """Create a transactionally consistent SQLite backup and checksum-verified upload."""
-        with tempfile.TemporaryDirectory(
-            prefix="trading-bot-campaign-snapshot-"
-        ) as directory:
+        with tempfile.TemporaryDirectory(prefix="trading-bot-campaign-snapshot-") as directory:
             snapshot_path = Path(directory) / "campaign.sqlite"
             destination = sqlite3.connect(snapshot_path)
             try:

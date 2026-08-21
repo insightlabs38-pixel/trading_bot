@@ -55,9 +55,7 @@ _CAMPAIGN_TRANSITIONS: dict[CampaignState, frozenset[CampaignState]] = {
 }
 
 _TRIAL_TRANSITIONS: dict[TrialState, frozenset[TrialState]] = {
-    TrialState.PENDING: frozenset(
-        {TrialState.STARTING, TrialState.PRUNED, TrialState.INTERRUPTED}
-    ),
+    TrialState.PENDING: frozenset({TrialState.STARTING, TrialState.PRUNED, TrialState.INTERRUPTED}),
     TrialState.STARTING: frozenset(
         {
             TrialState.RUNNING,

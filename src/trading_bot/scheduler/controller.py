@@ -76,9 +76,7 @@ class CampaignController:
     def transition_campaign(self, target: CampaignState) -> None:
         self.db.transition_campaign(self.campaign_id, target)
 
-    def register_screening_queue(
-        self, *, fallback_runtime_seconds: float
-    ) -> tuple[TrialSpec, ...]:
+    def register_screening_queue(self, *, fallback_runtime_seconds: float) -> tuple[TrialSpec, ...]:
         specs = build_screening_trial_specs(
             self.manifest,
             fallback_runtime_seconds=fallback_runtime_seconds,
@@ -206,8 +204,7 @@ class CampaignController:
             state = self.db.trial_state(row.trial_id)
             if state != TrialState.EVALUATING:
                 raise RuntimeError(
-                    f"promotion candidate {row.trial_id!r} must be in "
-                    f"EVALUATING, got {state.value}"
+                    f"promotion candidate {row.trial_id!r} must be in EVALUATING, got {state.value}"
                 )
             parent = self.db.trial_spec(row.trial_id)
             promoted = selected.get(row.trial_id)
@@ -222,17 +219,13 @@ class CampaignController:
                 scale=parent.scale,
                 stage=to_stage,
                 budget_fraction=to_budget_fraction,
-                priority=(
-                    LaunchPriority.FINALIST if to_stage == "finalists" else parent.priority
-                ),
+                priority=(LaunchPriority.FINALIST if to_stage == "finalists" else parent.priority),
                 config=parent.config,
                 parent_trial_id=parent.trial_id,
                 root_trial_id=parent.effective_root_trial_id,
                 attempt=0,
                 fallback_runtime_seconds=(
-                    parent.fallback_runtime_seconds
-                    * to_budget_fraction
-                    / parent.budget_fraction
+                    parent.fallback_runtime_seconds * to_budget_fraction / parent.budget_fraction
                 ),
             )
             self.db.insert_trial(self.campaign_id, child)
