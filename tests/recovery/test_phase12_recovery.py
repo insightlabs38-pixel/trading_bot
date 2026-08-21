@@ -324,20 +324,26 @@ def test_debug_bundle_redacts_secrets() -> None:
         assert secret not in serialized
 
 
-def test_protected_file_policy_blocks_frozen_contracts() -> None:
+def test_protected_file_policy_is_default_deny() -> None:
     policy = ProtectedFilePolicy()
     for path in (
         "PLAN.md",
         "IMPLEMENTATION_PLAN.md",
         "docs/evaluation_contract.md",
+        "src/trading_bot/data/features.py",
         "src/trading_bot/evaluation/leaderboard.py",
+        "src/trading_bot/config/schemas.py",
         "src/trading_bot/scheduler/db.py",
+        "src/trading_bot/recovery/repair.py",
+        "src/trading_bot/training/checkpoint.py",
         "configs/campaigns/h200_tournament_v1.yaml",
         ".github/workflows/cpu-ci.yml",
         ".env",
+        "README.md",
     ):
         assert policy.is_protected(path)
     assert not policy.is_protected("src/trading_bot/models/custom.py")
+    assert not policy.is_protected("src/trading_bot/training/trainer.py")
 
 
 def _proposal_for(path: str, current: bytes, replacement: str) -> RepairProposal:
@@ -474,15 +480,20 @@ def _init_git_repo(path: Path) -> None:
     subprocess.run(["git", "-C", str(path), "commit", "-qm", "base"], check=True)
 
 
+def _fixture_repair_policy() -> ProtectedFilePolicy:
+    return ProtectedFilePolicy(allowed_patterns=("model.py",))
+
+
 def test_repair_sandbox_isolated_patch_and_cpu_gates(tmp_path: Path) -> None:
     repository = tmp_path / "repo"
     _init_git_repo(repository)
     worktree = tmp_path / "repair-worktree"
     sandbox = RepairSandbox.create(repository_root=repository, worktree_path=worktree)
+    fixture_policy = _fixture_repair_policy()
     try:
         current = (worktree / "model.py").read_bytes()
         proposal = _proposal_for("model.py", current, "VALUE = 2\n")
-        assert sandbox.apply(proposal, ProtectedFilePolicy()) == ("model.py",)
+        assert sandbox.apply(proposal, fixture_policy) == ("model.py",)
         assert "VALUE = 2" in sandbox.diff()
         cpu_only = validate_repair(
             sandbox,
@@ -514,12 +525,13 @@ def test_repair_sandbox_rejects_protected_and_stale_targets(tmp_path: Path) -> N
     _init_git_repo(repository)
     worktree = tmp_path / "repair-worktree"
     sandbox = RepairSandbox.create(repository_root=repository, worktree_path=worktree)
+    fixture_policy = _fixture_repair_policy()
     try:
         frozen = (worktree / "PLAN.md").read_bytes()
         with pytest.raises(PermissionError, match="protected paths"):
             sandbox.apply(
                 _proposal_for("PLAN.md", frozen, "changed\n"),
-                ProtectedFilePolicy(),
+                fixture_policy,
             )
         stale = RepairProposal(
             summary="repair",
@@ -533,7 +545,7 @@ def test_repair_sandbox_rejects_protected_and_stale_targets(tmp_path: Path) -> N
             ),
         )
         with pytest.raises(ValueError, match="changed before patch"):
-            sandbox.apply(stale, ProtectedFilePolicy())
+            sandbox.apply(stale, fixture_policy)
     finally:
         sandbox.close()
 
