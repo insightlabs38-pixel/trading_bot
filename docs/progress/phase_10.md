@@ -84,7 +84,7 @@ The Phase 10 acceptance tests verify, among other things:
 - batch arithmetic, rung breadth, objective references, and registry lookups fail closed;
 - editing the YAML search range changes the enumerated space and manifest identity without editing Python.
 
-Permanent read-only CPU CI run `32438445520` / job `96644199981` tested synthetic merge `0b4f44fb0725df3370e49efdac75acb408681947` for branch head `141ec4cb82cfb2327e5798cc3c278a743519d1d4` against base `286fb112c099d8911893bfc54e40ed3a26fbc613`.
+The exact reconciled PR #20 head was `487e8842fdb61b1298d4c8b4e5c106e79bac7b03`. Permanent read-only CPU CI run `32438778975` / job `96645135014` tested synthetic merge `472f4c88661860f5ec803a98625db8e610fc749c` against base `286fb112c099d8911893bfc54e40ed3a26fbc613`.
 
 Results:
 
@@ -93,11 +93,13 @@ Results:
 - uv 0.10.12;
 - 73-package lock resolution and locked `baseline-cpu` sync passed;
 - Ruff passed;
-- Ruff format passed: **115 files already formatted**;
+- Ruff format passed: **116 files already formatted**;
 - strict mypy passed: **no issues in 59 source files**;
 - compileall passed;
-- pytest: **339 passed, 1 skipped in 18.29s**;
+- pytest: **339 passed, 1 skipped in 17.52s**;
 - the sole skip is the existing opt-in Phase 2 real-S3 provider gate requiring external endpoint credentials.
+
+PR #20 was merged with the required standard merge method as `bd6eeb634475b6ecda7684a7dacf49b6678fd042`. Comparing that actual merge commit with the CI-tested synthetic merge reports no changed files, so the content landed on `main` is identical to the content exercised by the final PR gate.
 
 ## Gate
 
