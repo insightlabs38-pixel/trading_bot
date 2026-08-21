@@ -1,0 +1,23 @@
+schema_version: 1
+policy_id: phase12-recovery-v1
+max_process_retries: 2
+max_non_finite_retries: 1
+max_evaluator_retries: 3
+max_storage_retries: 5
+oom_microbatch_divisor: 2
+minimum_microbatch_size: 1
+preserve_effective_batch: true
+heartbeat_timeouts_seconds:
+  COMPILING: 900.0
+  DATALOADING: 300.0
+  TRAINING: 180.0
+  CHECKPOINTING: 300.0
+  EVALUATING: 300.0
+circuit_window_seconds: 900.0
+circuit_failure_threshold: 3
+circuit_cooldown_seconds: 300.0
+minimum_free_disk_bytes: 5368709120
+repair_primary_timeout_seconds: 45
+repair_reasoning_timeout_seconds: 120
+repair_max_output_bytes: 262144
+debug_bundle_max_bytes: 524288
