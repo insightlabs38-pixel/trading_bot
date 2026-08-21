@@ -5,10 +5,10 @@ from __future__ import annotations
 import copy
 import math
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal
 
 import yaml  # type: ignore[import-untyped]
-from pydantic import Field, JsonValue, PositiveFloat, PositiveInt, model_validator
+from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
 from trading_bot.config.base import FrozenConfigModel
 from trading_bot.recovery.types import (
@@ -74,7 +74,7 @@ def derive_oom_child(parent: TrialSpec, policy: RecoveryPolicy) -> TrialSpec | N
     batch_value = parent.config.get("batch")
     if not isinstance(batch_value, dict):
         return None
-    batch = cast(dict[str, JsonValue], copy.deepcopy(batch_value))
+    batch = copy.deepcopy(batch_value)
     microbatch = batch.get("microbatch_size")
     effective = batch.get("effective_batch_size")
     if not isinstance(microbatch, int) or not isinstance(effective, int):
@@ -92,7 +92,7 @@ def derive_oom_child(parent: TrialSpec, policy: RecoveryPolicy) -> TrialSpec | N
     if policy.preserve_effective_batch and reduced * accumulation != effective:
         return None
 
-    child_config = cast(dict[str, JsonValue], copy.deepcopy(parent.config))
+    child_config = copy.deepcopy(parent.config)
     child_config["batch"] = {
         "microbatch_size": reduced,
         "gradient_accumulation_steps": accumulation,
@@ -116,7 +116,7 @@ def derive_oom_child(parent: TrialSpec, policy: RecoveryPolicy) -> TrialSpec | N
 
 
 def derive_reference_fallback_child(parent: TrialSpec) -> TrialSpec:
-    child_config = cast(dict[str, JsonValue], copy.deepcopy(parent.config))
+    child_config = copy.deepcopy(parent.config)
     child_config["runtime_overrides"] = {"custom_backend": "reference"}
     return TrialSpec(
         trial_id=f"{parent.trial_id}-reference-r{parent.attempt + 1}",
