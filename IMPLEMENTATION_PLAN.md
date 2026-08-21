@@ -14,7 +14,7 @@ This document is the detailed execution plan for `trading_bot`. It is intended t
 
 ### Reconciliation note — 2026-08-20
 
-The Phase 0–9 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; Phase 7 is complete on the CPU/reference baseline gate; the Phase 8 CPU/reference core-architecture gate has passed while selected pretrained-foundation and GPU/H200 acceptance remain open; and the Phase 9 CPU/reference custom-architecture/correctness gate has passed while Triton and target-GPU optimization acceptance remain open. Remaining open items require external provider/data choices, frozen production methodology/dates, finalized production-data validation, selected external model artifacts, or GPU/H200/Triton acceptance.
+The Phase 0–10 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; Phase 7 is complete on the CPU/reference baseline gate; the Phase 8 CPU/reference core-architecture gate has passed while selected pretrained-foundation and GPU/H200 acceptance remain open; the Phase 9 CPU/reference custom-architecture/correctness gate has passed while Triton and target-GPU optimization acceptance remain open; and Phase 10 is complete on the version-controlled campaign search-manifest gate. Remaining open items require external provider/data choices, frozen production methodology/dates, finalized production-data validation, selected external model artifacts, GPU/H200/Triton acceptance, or later scheduler/runtime integration.
 
 CPU-only GitHub Actions verification now runs on one standard `ubuntu-latest` hosted runner using Python 3.12 and the committed `uv.lock`. The permanent read-only gate runs Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite. GPU/Triton/H200 checks remain intentionally excluded until compatible GPU infrastructure is available.
 
@@ -101,7 +101,7 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | 7. Baseline model families | **COMPLETE — CPU/reference baseline gate passed** | Yes |
 | 8. Advanced model families | **IN PROGRESS — CPU/reference core gate passed; foundation/GPU acceptance pending** | Yes |
 | 9. Custom architectures + Triton | **IN PROGRESS — CPU/reference custom gate passed; Triton/GPU acceptance pending** | Yes |
-| 10. Experiment configuration/search spaces | Not started | Yes |
+| 10. Experiment configuration/search spaces | **COMPLETE — campaign search-manifest gate passed** | Yes |
 | 11. H200 campaign scheduler | Not started | Yes |
 | 12. Fault tolerance + AI repair | Not started | Yes |
 | 13. Observability + Discord | Not started | Yes |
@@ -846,26 +846,39 @@ Custom architecture results must be explainable through ablations. Custom kernel
 
 Freeze the campaign manifest before rental day.
 
-- [ ] Define architecture-family registry.
-- [ ] Define small/medium/large canonical configs.
-- [ ] Define screening search spaces.
-- [ ] Define objective variants:
-  - [ ] Huber/excess-return regression;
-  - [ ] cross-sectional ranking;
-  - [ ] multi-task return + rank + volatility + direction;
-  - [ ] multi-horizon variants;
-  - [ ] distributional variants where selected.
-- [ ] Define learning-rate ranges.
-- [ ] Define dropout/regularization ranges.
-- [ ] Define context-length choices.
-- [ ] Define batch/effective-batch constraints.
-- [ ] Define seed policy.
-- [ ] Define mandatory vs optional experiment pools.
-- [ ] Define screening/promotion/full training budgets.
+- [x] Define architecture-family registry — 19 explicit family entries with mandatory/optional and searchable/reference-only boundaries.
+- [x] Define small/medium/large canonical configs — searchable neural/advanced/custom families have version-controlled scale presets; classical references use an explicit `reference` preset.
+- [x] Define screening search spaces — bounded axes plus per-family search-axis opt-in are encoded in YAML.
+- [x] Define objective variants:
+  - [x] Huber/excess-return regression — MSE and Huber 15-minute variants are registered; Huber is the frozen architecture-screening objective.
+  - [x] cross-sectional ranking — 15-minute pairwise-ranking objective is registered.
+  - [x] multi-task return + rank + volatility + direction — fully specified in the manifest and deliberately `planned_not_selected` until the common loss/head path supports those exact semantics end-to-end.
+  - [x] multi-horizon variants — 15/30-minute Huber candidate is fully specified and `planned_not_selected` until multi-horizon output/loss semantics are implemented.
+  - [x] distributional variants where selected — a 15-minute quantile candidate is defined and `planned_not_selected`; no unsupported distributional launch is claimed.
+- [x] Define learning-rate ranges — `1e-4`, `3e-4`, `1e-3`.
+- [x] Define dropout/regularization ranges — dropout candidates `0`, `0.1`, `0.2` and weight decay `0`, `1e-4`, `1e-3`; families only opt into axes their current constructors support.
+- [x] Define context-length choices — `32`, `64`, `128`.
+- [x] Define batch/effective-batch constraints — effective batch 256 via `64×4`, `128×2`, or `256×1` microbatch/accumulation.
+- [x] Define seed policy — screening seed 17; finalist seeds 17/29/43.
+- [x] Define mandatory vs optional experiment pools — 17 mandatory and 2 optional/reference-only entries in v1.
+- [x] Define screening/promotion/full training budgets — 9 calibration, 66 screening at 15%, 18 promotion at 50%, 18 objective-search at 50%, and 4 full-budget finalists across 3 seeds, totaling 123 planned fits before runtime adaptation.
+
+### Progress note — 2026-08-20
+
+- `configs/campaigns/h200_tournament_v1.yaml` is the frozen v1 architecture/objective/search/budget contract; the strict schema and manifest-only enumerator live under `src/trading_bot/campaign`.
+- Canonical JSON plus SHA-256 give the validated YAML a formatting-independent identity suitable for later scheduler/audit lineage.
+- Campaign loading/enumeration does not import PyTorch/model code, preserving the Phase 11 controller boundary.
+- CI independently verifies every Phase 8 advanced and Phase 9 custom YAML small/medium/large preset against the corresponding model-spec builder and constructs/forwards every neural-baseline scale.
+- Unsupported full-volatility multitask, multi-horizon, and quantile objectives are defined but cannot be referenced by launchable architectures until their common training semantics exist; the manifest fails closed instead of approximating them.
+- The rung breadth/fractions follow the already-documented campaign design: 66 screening → 18 promotion → 4 finalists, with 123 planned fits inside the intended approximately 100–130 range.
+- Read-only Python 3.12 CI run `32438445520` / job `96644199981` passed lock freshness, Ruff, formatting across 115 files, strict mypy across 59 source files, compileall, and 339 tests with only the unrelated opt-in Phase 2 real-S3 provider gate skipped.
+- Detailed evidence and scope boundaries are recorded in `docs/progress/phase_10.md`.
 
 ## Gate
 
 A version-controlled campaign YAML/manifest can enumerate the intended experiment space without editing Python.
+
+**PASSED — VERSION-CONTROLLED CAMPAIGN SEARCH MANIFEST.** The v1 architecture registry, canonical size presets, objective candidates, bounded search axes, seed policy, mandatory/optional pools, and relative screening/promotion/finalist budgets load, validate, hash, and enumerate from YAML without Python edits. Phase 11 may consume this immutable search contract; target-GPU runtime calibration and deadline scheduling remain Phase 11/17 work rather than Phase 10 claims.
 
 ---
 
@@ -1519,7 +1532,7 @@ Every material run should record:
 ## Versioning
 
 - [x] Dataset/stage artifact versioning primitives are immutable/content-addressed.
-- [ ] Campaign configs immutable once campaign starts — enforcement belongs to Phase 10/11.
+- [ ] Campaign configs immutable once campaign starts — Phase 10 freezes/identifies the manifest; runtime enforcement belongs to Phase 11.
 - [ ] Trial configs immutable — enforcement belongs to Phase 5/11.
 - [ ] Behavior-changing bug fix creates a new child trial/version — scheduler enforcement not yet implemented.
 - [ ] AI-generated patches are committed/audited before being treated as valid experiment code — Phase 12.
@@ -1567,15 +1580,16 @@ Current recommended sequence, reconciled to implemented work:
 12. [x] Simple baseline models and an end-to-end research smoke test.
 13. [x] Advanced/core model families — CPU/reference core gate; external foundation/GPU acceptance remains.
 14. [x] Custom Market Mixer/reference custom operators — CPU/reference correctness gate; Triton/GPU optimization acceptance remains.
-15. [ ] Campaign scheduler/state DB/fault handling.
-16. [ ] Discord/telemetry/sync services.
-17. [ ] AI repair sandbox.
-18. [ ] CPU/GPU Docker images and Compose orchestration.
-19. [ ] Scheduler simulation and full fault-injection dress rehearsal.
-20. [ ] Full production data build/staging.
-21. [ ] H200 campaign.
+15. [x] Version-controlled campaign registry/search-space manifest.
+16. [ ] Campaign scheduler/state DB/fault handling.
+17. [ ] Discord/telemetry/sync services.
+18. [ ] AI repair sandbox.
+19. [ ] CPU/GPU Docker images and Compose orchestration.
+20. [ ] Scheduler simulation and full fault-injection dress rehearsal.
+21. [ ] Full production data build/staging.
+22. [ ] H200 campaign.
 
-External production/hardware/model-artifact blockers should be closed as credentials, frozen production data/methodology, selected pretrained checkpoints, and GPU/Triton infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, baseline-model, advanced-core, and custom-reference gates.
+External production/hardware/model-artifact blockers should be closed as credentials, frozen production data/methodology, selected pretrained checkpoints, and GPU/Triton infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, baseline-model, advanced-core, custom-reference, and campaign-manifest gates.
 
 ---
 
@@ -1592,7 +1606,7 @@ The H200 should not be rented for the real campaign until all of the following c
 - [ ] Any Triton kernels match references.
 - [x] Evaluation metrics pass hand-calculated tests.
 - [ ] Cost/slippage model is frozen.
-- [ ] Campaign YAML/search spaces are frozen.
+- [x] Campaign YAML/search spaces are frozen.
 - [ ] Scheduler simulation passes.
 - [ ] Real shortened campaign passes.
 - [ ] OOM recovery passes.
