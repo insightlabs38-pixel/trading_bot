@@ -294,9 +294,10 @@ def test_yaml_change_alters_search_without_python_edit(tmp_path: Path) -> None:
 
     assert changed.search.learning_rates == (0.0001, 0.0003, 0.001, 0.0007)
     assert campaign_manifest_sha256(changed) != campaign_manifest_sha256(original)
-    assert enumerate_campaign(changed).screening_candidate_points > enumerate_campaign(
-        original
-    ).screening_candidate_points
+    assert (
+        enumerate_campaign(changed).screening_candidate_points
+        > enumerate_campaign(original).screening_candidate_points
+    )
 
 
 def test_registry_resolvers_fail_closed() -> None:
