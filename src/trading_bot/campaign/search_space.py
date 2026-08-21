@@ -415,9 +415,7 @@ def campaign_manifest_sha256(manifest: CampaignSearchManifest) -> str:
 
 def enumerate_campaign(manifest: CampaignSearchManifest) -> CampaignEnumeration:
     """Summarize the entire intended search space without expanding every trial."""
-    mandatory = tuple(
-        item.family for item in manifest.architectures if item.pool == "mandatory"
-    )
+    mandatory = tuple(item.family for item in manifest.architectures if item.pool == "mandatory")
     optional = tuple(item.family for item in manifest.architectures if item.pool == "optional")
     searchable = tuple(item.family for item in manifest.architectures if item.searchable)
     enabled_objectives = tuple(
@@ -458,11 +456,7 @@ def enumerate_campaign(manifest: CampaignSearchManifest) -> CampaignEnumeration:
     finalist_systems = int(budget_map["finalists"].target_configurations or 0)
     finalist_fits = finalist_systems * len(manifest.seeds.finalist_seeds)
     planned_fit_count = (
-        calibration_count
-        + screening_count
-        + promotion_count
-        + objective_count
-        + finalist_fits
+        calibration_count + screening_count + promotion_count + objective_count + finalist_fits
     )
     return CampaignEnumeration(
         campaign_id=manifest.campaign_id,
@@ -486,9 +480,7 @@ def objective_by_id(manifest: CampaignSearchManifest, objective_id: str) -> Obje
     raise KeyError(f"campaign objective {objective_id!r} is not registered")
 
 
-def architecture_by_id(
-    manifest: CampaignSearchManifest, family: str
-) -> ArchitectureFamilySpec:
+def architecture_by_id(manifest: CampaignSearchManifest, family: str) -> ArchitectureFamilySpec:
     """Resolve an architecture by immutable manifest ID and fail closed if absent."""
     for architecture in manifest.architectures:
         if architecture.family == family:
