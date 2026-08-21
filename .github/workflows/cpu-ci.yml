@@ -2,61 +2,58 @@ name: CPU CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: cpu-ci-phase8-typefix-${{ github.ref }}
+  group: cpu-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  typefix:
-    name: Apply Phase 8 typing fix
-    if: github.event_name == 'pull_request'
+  verify:
+    name: Python 3.12 CPU verification
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
-      - name: Check out PR head branch
+      - name: Check out exact workflow revision
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            fetch_ref="refs/pull/${PR_NUMBER}/merge"
+          else
+            fetch_ref="$GITHUB_SHA"
+          fi
           git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            fetch --no-tags --depth=1 origin "refs/heads/${HEAD_REF}"
-          git checkout -B "$HEAD_REF" FETCH_HEAD
+            fetch --no-tags --depth=1 origin "$fetch_ref"
+          git checkout --detach FETCH_HEAD
 
-      - name: Apply strict typing boundary fix
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
+      - name: Verify system Python 3.12
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          python3.12 --version
+          python3.12 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
 
-          path = Path("src/trading_bot/models/advanced.py")
-          text = path.read_text(encoding="utf-8")
-          replacements = {
-              "from typing import Literal\n": "from typing import Literal, cast\n",
-              "        return self.norm(sequence + encoded)\n":
-              "        return cast(Tensor, self.norm(sequence + encoded))\n",
-          }
-          for old, new in replacements.items():
-              if text.count(old) != 1:
-                  raise RuntimeError(f"expected exactly one occurrence: {old!r}")
-              text = text.replace(old, new, 1)
-          path.write_text(text, encoding="utf-8")
-          PY
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/trading_bot/models/advanced.py
-          git commit -m "Fix Phase 8 strict PyTorch typing boundary"
-          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
-            push origin "HEAD:refs/heads/${HEAD_REF}"
+      - name: Bootstrap pinned uv CLI
+        run: |
+          python3.12 -m venv /tmp/trading-bot-uv
+          /tmp/trading-bot-uv/bin/python -m pip install --disable-pip-version-check "uv>=0.10,<0.11"
+          echo "/tmp/trading-bot-uv/bin" >> "$GITHUB_PATH"
+
+      - name: Verify dependency lock is current
+        run: uv lock --check
+
+      - name: Sync locked CPU baseline verification environment
+        run: uv sync --locked --group baseline-cpu
+
+      - name: Run lint, format, types, compile, and tests
+        run: bash scripts/verify_cpu.sh
