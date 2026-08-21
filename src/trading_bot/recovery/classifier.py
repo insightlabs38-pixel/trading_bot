@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import re
 
-from trading_bot.recovery.types import FailureClass, FailureClassification, FailureEvidence, WorkerPhase
+from trading_bot.recovery.types import (
+    FailureClass,
+    FailureClassification,
+    FailureEvidence,
+    WorkerPhase,
+)
 
 _INFRASTRUCTURE_LIKE = frozenset(
     {
@@ -65,7 +70,10 @@ _PATTERNS: tuple[tuple[FailureClass, tuple[re.Pattern[str], ...]], ...] = (
     (
         FailureClass.STORAGE_FAILURE,
         (
-            re.compile(r"storage.*(?:upload|download|sync).*(?:fail|timeout|unavailable)", re.I | re.S),
+            re.compile(
+                r"storage.*(?:upload|download|sync).*(?:fail|timeout|unavailable)",
+                re.I | re.S,
+            ),
             re.compile(r"(?:s3|object store).*(?:timeout|unavailable|connection)", re.I | re.S),
         ),
     ),
@@ -124,13 +132,17 @@ def classify_failure(evidence: FailureEvidence) -> FailureClassification:
     ):
         return _classification(
             FailureClass.DISK_PRESSURE,
-            f"free disk {evidence.free_disk_bytes} below floor {evidence.expected_disk_floor_bytes}",
+            f"free disk {evidence.free_disk_bytes} below floor "
+            f"{evidence.expected_disk_floor_bytes}",
         )
 
     combined = "\n".join((evidence.message, evidence.stdout, evidence.stderr))
     for failure_class, patterns in _PATTERNS:
         if any(pattern.search(combined) for pattern in patterns):
-            return _classification(failure_class, f"matched deterministic {failure_class.value} signature")
+            return _classification(
+                failure_class,
+                f"matched deterministic {failure_class.value} signature",
+            )
 
     if evidence.worker_phase == WorkerPhase.EVALUATING and evidence.exit_code not in {None, 0}:
         return _classification(
