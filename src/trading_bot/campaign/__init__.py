@@ -1,0 +1,43 @@
+"""Campaign configuration, search-space, and future scheduling interfaces."""
+
+from trading_bot.campaign.search_space import (
+    ArchitectureFamilySpec,
+    BatchConstraint,
+    CampaignEnumeration,
+    CampaignManifestError,
+    CampaignSearchManifest,
+    CampaignStage,
+    CanonicalScaleConfig,
+    HyperparameterSearchSpace,
+    ObjectiveVariant,
+    SeedPolicy,
+    StageBudget,
+    architecture_by_id,
+    campaign_manifest_canonical_json,
+    campaign_manifest_sha256,
+    enumerate_campaign,
+    load_campaign_search_manifest,
+    objective_by_id,
+    scale_parameters,
+)
+
+__all__ = [
+    "ArchitectureFamilySpec",
+    "BatchConstraint",
+    "CampaignEnumeration",
+    "CampaignManifestError",
+    "CampaignSearchManifest",
+    "CampaignStage",
+    "CanonicalScaleConfig",
+    "HyperparameterSearchSpace",
+    "ObjectiveVariant",
+    "SeedPolicy",
+    "StageBudget",
+    "architecture_by_id",
+    "campaign_manifest_canonical_json",
+    "campaign_manifest_sha256",
+    "enumerate_campaign",
+    "load_campaign_search_manifest",
+    "objective_by_id",
+    "scale_parameters",
+]
