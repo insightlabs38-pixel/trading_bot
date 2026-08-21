@@ -366,7 +366,7 @@ class _LongMemoryExpert(nn.Module):
         )
 
     def forward(self, sequence: Tensor) -> Tensor:
-        return self.operator(sequence)[:, -1]
+        return cast(Tensor, self.operator(sequence))[:, -1]
 
 
 class _TemporalAttentionExpert(nn.Module):
