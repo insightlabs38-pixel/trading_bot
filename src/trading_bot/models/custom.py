@@ -426,9 +426,10 @@ class MultiScaleMarketMixerReturnModel(TradingModel):
         num_heads: int = 4,
         num_decays: int = 4,
         max_sequence_length: int = 64,
-        ablations: MarketMixerAblations = MarketMixerAblations(),
+        ablations: MarketMixerAblations | None = None,
     ) -> None:
         super().__init__()
+        resolved_ablations = ablations or MarketMixerAblations()
         _validate_custom_dimensions(
             input_features,
             model_features,
@@ -440,24 +441,24 @@ class MultiScaleMarketMixerReturnModel(TradingModel):
         self.input_features = input_features
         self.model_features = model_features
         self.max_sequence_length = max_sequence_length
-        self.ablations = ablations
+        self.ablations = resolved_ablations
         self.feature_encoder = nn.Linear(input_features, model_features)
         self.shared_norm = nn.LayerNorm(model_features)
         self.short_branch = (
-            _CausalLocalExpert(model_features) if ablations.short_branch else None
+            _CausalLocalExpert(model_features) if resolved_ablations.short_branch else None
         )
         self.long_branch = (
             _LongMemoryExpert(model_features, num_decays)
-            if ablations.long_branch
+            if resolved_ablations.long_branch
             else None
         )
-        both_branches = ablations.short_branch and ablations.long_branch
+        both_branches = resolved_ablations.short_branch and resolved_ablations.long_branch
         self.fusion_gate = (
             nn.Linear(model_features * 2, 2)
-            if both_branches and ablations.gated_fusion
+            if both_branches and resolved_ablations.gated_fusion
             else None
         )
-        if ablations.cross_sectional:
+        if resolved_ablations.cross_sectional:
             cross_layer = nn.TransformerEncoderLayer(
                 d_model=model_features,
                 nhead=num_heads,
@@ -474,7 +475,7 @@ class MultiScaleMarketMixerReturnModel(TradingModel):
             self.cross_sectional_encoder = None
         self.market_projection = (
             nn.Linear(model_features * 2, model_features)
-            if ablations.market_context
+            if resolved_ablations.market_context
             else None
         )
         self.final_norm = nn.LayerNorm(model_features)
