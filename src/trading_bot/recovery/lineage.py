@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import copy
-from typing import cast
-
-from pydantic import JsonValue
 
 from trading_bot.scheduler.types import TrialSpec
 
@@ -16,7 +13,7 @@ def derive_repaired_child(parent: TrialSpec, *, proposal_sha256: str) -> TrialSp
     )
     if not valid_digest:
         raise ValueError("proposal_sha256 must be a lowercase SHA-256 digest")
-    child_config = cast(dict[str, JsonValue], copy.deepcopy(parent.config))
+    child_config = copy.deepcopy(parent.config)
     child_config["repair_provenance"] = {"proposal_sha256": proposal_sha256}
     return TrialSpec(
         trial_id=f"{parent.trial_id}-repair-{proposal_sha256[:10]}",
