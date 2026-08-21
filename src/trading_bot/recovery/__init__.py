@@ -1,10 +1,19 @@
 """CPU-safe deterministic fault recovery and repair infrastructure."""
 
-from trading_bot.recovery.canary import GoldenCanaryResult, GoldenCanarySpec, run_cpu_golden_canary
+from trading_bot.recovery.canary import (
+    GoldenCanaryResult,
+    GoldenCanarySpec,
+    run_cpu_golden_canary,
+)
 from trading_bot.recovery.circuit import CircuitBreaker, CircuitState
 from trading_bot.recovery.classifier import classify_failure
 from trading_bot.recovery.health import check_dataset_sample, check_disk, check_storage_object
-from trading_bot.recovery.heartbeat import WorkerHeartbeat, heartbeat_evidence, read_heartbeat, write_heartbeat
+from trading_bot.recovery.heartbeat import (
+    WorkerHeartbeat,
+    heartbeat_evidence,
+    read_heartbeat,
+    write_heartbeat,
+)
 from trading_bot.recovery.lineage import derive_repaired_child
 from trading_bot.recovery.policy import (
     RecoveryPolicy,
