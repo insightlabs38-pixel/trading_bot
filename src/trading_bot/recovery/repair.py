@@ -97,14 +97,9 @@ class ProtectedFilePolicy(FrozenConfigModel):
         if normalized.is_absolute() or ".." in normalized.parts:
             return True
         normalized_text = normalized.as_posix()
-        if any(
-            fnmatchcase(normalized_text, pattern)
-            for pattern in self.protected_patterns
-        ):
+        if any(fnmatchcase(normalized_text, pattern) for pattern in self.protected_patterns):
             return True
-        return not any(
-            fnmatchcase(normalized_text, pattern) for pattern in self.allowed_patterns
-        )
+        return not any(fnmatchcase(normalized_text, pattern) for pattern in self.allowed_patterns)
 
     def require_allowed(self, paths: tuple[str, ...]) -> None:
         blocked = sorted(path for path in paths if self.is_protected(path))
