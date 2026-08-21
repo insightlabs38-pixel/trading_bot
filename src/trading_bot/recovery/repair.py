@@ -54,9 +54,7 @@ _DEFAULT_PROTECTED_PATTERNS = (
     "**/*secret*",
 )
 
-_FORBIDDEN_DATA_SUFFIXES = frozenset(
-    {".parquet", ".arrow", ".feather", ".csv", ".npy", ".npz"}
-)
+_FORBIDDEN_DATA_SUFFIXES = frozenset({".parquet", ".arrow", ".feather", ".csv", ".npy", ".npz"})
 
 
 class DebugBundle(FrozenConfigModel):
@@ -134,9 +132,7 @@ class RepairAuditLog:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def append(self, record: RepairAuditRecord) -> None:
-        line = json.dumps(
-            record.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
-        )
+        line = json.dumps(record.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
             handle.flush()
@@ -153,9 +149,7 @@ class RepairAuditLog:
 
 
 def redact_text(value: str) -> str:
-    redacted = _SECRET_ASSIGNMENT_RE.sub(
-        lambda match: f"{match.group(1)}={_REDACTED}", value
-    )
+    redacted = _SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}={_REDACTED}", value)
     redacted = _AWS_KEY_RE.sub(_REDACTED, redacted)
     redacted = _GITHUB_TOKEN_RE.sub(_REDACTED, redacted)
     return _BEARER_RE.sub(f"Bearer {_REDACTED}", redacted)
