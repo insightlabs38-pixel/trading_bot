@@ -14,7 +14,7 @@ This document is the detailed execution plan for `trading_bot`. It is intended t
 
 ### Reconciliation note — 2026-08-20
 
-The Phase 0–8 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; Phase 7 is complete on the CPU/reference baseline gate; and the Phase 8 CPU/reference core-architecture gate has passed while selected pretrained-foundation and GPU/H200 acceptance remain open. Remaining open items require external provider/data choices, frozen production methodology/dates, finalized production-data validation, selected external model artifacts, or GPU/H200 acceptance.
+The Phase 0–9 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; Phase 7 is complete on the CPU/reference baseline gate; the Phase 8 CPU/reference core-architecture gate has passed while selected pretrained-foundation and GPU/H200 acceptance remain open; and the Phase 9 CPU/reference custom-architecture/correctness gate has passed while Triton and target-GPU optimization acceptance remain open. Remaining open items require external provider/data choices, frozen production methodology/dates, finalized production-data validation, selected external model artifacts, or GPU/H200/Triton acceptance.
 
 CPU-only GitHub Actions verification now runs on one standard `ubuntu-latest` hosted runner using Python 3.12 and the committed `uv.lock`. The permanent read-only gate runs Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite. GPU/Triton/H200 checks remain intentionally excluded until compatible GPU infrastructure is available.
 
@@ -100,7 +100,7 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | 6. Evaluation/backtesting framework | **IN PROGRESS — CPU gate passed; real factor/BBO data acceptance pending** | Yes |
 | 7. Baseline model families | **COMPLETE — CPU/reference baseline gate passed** | Yes |
 | 8. Advanced model families | **IN PROGRESS — CPU/reference core gate passed; foundation/GPU acceptance pending** | Yes |
-| 9. Custom architectures + Triton | Not started | Yes |
+| 9. Custom architectures + Triton | **IN PROGRESS — CPU/reference custom gate passed; Triton/GPU acceptance pending** | Yes |
 | 10. Experiment configuration/search spaces | Not started | Yes |
 | 11. H200 campaign scheduler | Not started | Yes |
 | 12. Fault tolerance + AI repair | Not started | Yes |
@@ -784,39 +784,49 @@ Every core architecture can complete a screening-budget run using the same train
 
 Implement incrementally:
 
-- [ ] shared feature encoder;
-- [ ] short-timescale branch;
-- [ ] medium/long temporal branch;
-- [ ] gated multi-timescale fusion;
-- [ ] cross-sectional stock interaction;
-- [ ] market/sector context tokens or equivalent;
-- [ ] return head;
-- [ ] rank head;
-- [ ] volatility head;
-- [ ] uncertainty/distributional head.
+- [x] shared feature encoder;
+- [x] short-timescale branch — causal depthwise/pointwise temporal convolution reference;
+- [x] medium/long temporal branch — learnable causal multi-decay temporal reference;
+- [x] gated multi-timescale fusion;
+- [x] cross-sectional stock interaction with a same-decision-timestamp guard;
+- [x] market/sector context tokens or equivalent — same-timestamp market-mean context is implemented without inventing unavailable sector IDs;
+- [x] return head;
+- [x] rank head;
+- [x] volatility head;
+- [x] uncertainty/distributional head — uncertainty head is implemented in the common reference output.
 
-Ablations must allow major components to be disabled independently.
+Ablations allow major components to be disabled independently through the stable `full`, `no_short`, `no_long`, `no_gated_fusion`, `no_cross_sectional`, and `no_market_context` suite.
 
 ## Heterogeneous MoE
 
-- [ ] Router.
-- [ ] TCN/local expert.
-- [ ] state-space/long-memory expert.
-- [ ] attention or alternate structural expert.
-- [ ] optional frequency-domain expert.
-- [ ] router diagnostics/expert utilization logging.
+- [x] Router — sparse top-k routing informed by sample and same-timestamp market state.
+- [x] TCN/local expert.
+- [x] state-space/long-memory expert — multi-decay reference operator.
+- [x] attention or alternate structural expert — causal temporal-attention expert.
+- [x] optional frequency-domain expert.
+- [x] router diagnostics/expert utilization logging — assignment counts, sparse mean weights, entropy, and active-parameter upper bound.
 
 ## Custom temporal operator
 
-- [ ] Clear mathematical specification.
-- [ ] Correct PyTorch reference implementation first.
-- [ ] Forward numerical tests.
-- [ ] Gradient tests.
-- [ ] Profiling proving it matters enough to optimize.
-- [ ] Triton implementation only after reference validation.
-- [ ] Triton numerical equivalence across representative shapes/dtypes/strides.
-- [ ] Triton fallback to reference path.
-- [ ] Throughput and memory benchmark.
+- [x] Clear mathematical specification in `docs/custom_temporal_operator.md`.
+- [x] Correct PyTorch reference implementation first.
+- [x] Forward numerical tests including a hand-calculated recurrence fixture.
+- [x] Gradient tests using `torch.autograd.gradcheck`.
+- [ ] Profiling proving it matters enough to optimize — CPU reference timing/state accounting exists, but target-GPU profiling has not established a material H200 bottleneck.
+- [ ] Triton implementation only after reference validation — intentionally not implemented until profiling justifies it on compatible GPU hardware.
+- [ ] Triton numerical equivalence across representative shapes/dtypes/strides — requires a real Triton implementation/runtime.
+- [ ] Triton fallback to reference path — `auto` currently selects the reference and explicit unvalidated Triton fails closed; real Triton compile/runtime fallback remains unvalidated.
+- [x] Throughput and memory benchmark — CPU/reference samples-per-second plus exact learned-state bytes; representative GPU/H200 throughput/peak memory remains external.
+
+### Progress note — 2026-08-20
+
+- The Market Mixer and heterogeneous MoE are implemented under `src/trading_bot/models/custom.py` using the common Phase 5 `TrainingBatch`/`ModelOutput`/`Trainer` boundary and common prediction heads.
+- Market Mixer components have a stable one-component-off ablation suite; cross-sectional and market-context paths fail closed on mixed decision timestamps.
+- The MoE performs sparse top-k dispatch over local-TCN, long-memory multi-decay, temporal-attention, and optional frequency experts and exposes detached router-utilization diagnostics.
+- The custom multi-decay recurrence is mathematically frozen before optimization and is covered by hand-calculated forward, gradcheck, causal-prefix, and non-contiguous/strided-input tests.
+- Both custom architecture families train, checkpoint at optimizer step 2, reconstruct/restore, continue to step 4, publish the common Parquet + Zstd predictions, and enter one canonical Phase 6 cost-aware evaluator/leaderboard/report rehearsal.
+- Read-only Python 3.12 CI run `32435211863` / job `96634923295` passed lock freshness, Ruff, formatting across 111 files, strict mypy across 57 source files, compileall, and 292 tests with only the unrelated opt-in Phase 2 real-S3 provider gate skipped.
+- Detailed scope and remaining Triton/GPU acceptance are recorded in `docs/progress/phase_09.md` and `docs/custom_temporal_operator.md`.
 
 ## Triton policy
 
@@ -825,6 +835,8 @@ Do not rewrite already-optimized generic GEMM/attention merely to use Triton. Pr
 ## Gate
 
 Custom architecture results must be explainable through ablations. Custom kernels must demonstrate correctness independently of speed improvement.
+
+**CPU/REFERENCE CUSTOM ARCHITECTURE GATE PASSED.** The Market Mixer ablation boundary, heterogeneous MoE, and custom temporal reference math are exercised by the common CPU training/evaluation pipeline. Phase 9 remains **IN PROGRESS** only for target-GPU bottleneck profiling and any justified Triton implementation/equivalence/fallback/H200 performance acceptance; no Triton or GPU performance result is claimed by this CPU gate.
 
 ---
 
@@ -1514,7 +1526,7 @@ Every material run should record:
 
 ## Performance discipline
 
-- [ ] Profile before writing custom kernels.
+- [x] Profile before writing custom kernels — CPU/reference operator timing and state accounting are in place before any Triton implementation; target-GPU profiling still gates whether optimization is justified.
 - [ ] Keep H200 training input local/hot whenever practical.
 - [ ] CPU evaluation/storage operations must not unnecessarily idle the GPU.
 - [x] Store promoted/final predictions to permit CPU-only reevaluation.
@@ -1554,7 +1566,7 @@ Current recommended sequence, reconciled to implemented work:
 11. [x] Canonical evaluator and metric unit tests.
 12. [x] Simple baseline models and an end-to-end research smoke test.
 13. [x] Advanced/core model families — CPU/reference core gate; external foundation/GPU acceptance remains.
-14. [ ] Custom Market Mixer/reference custom operators.
+14. [x] Custom Market Mixer/reference custom operators — CPU/reference correctness gate; Triton/GPU optimization acceptance remains.
 15. [ ] Campaign scheduler/state DB/fault handling.
 16. [ ] Discord/telemetry/sync services.
 17. [ ] AI repair sandbox.
@@ -1563,7 +1575,7 @@ Current recommended sequence, reconciled to implemented work:
 20. [ ] Full production data build/staging.
 21. [ ] H200 campaign.
 
-External production/hardware/model-artifact blockers should be closed as credentials, frozen production data/methodology, selected pretrained checkpoints, and GPU infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, baseline-model, and advanced-core gates.
+External production/hardware/model-artifact blockers should be closed as credentials, frozen production data/methodology, selected pretrained checkpoints, and GPU/Triton infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, baseline-model, advanced-core, and custom-reference gates.
 
 ---
 
@@ -1576,7 +1588,7 @@ The H200 should not be rented for the real campaign until all of the following c
 - [x] Leakage regression suite exists; it must still pass the finalized production dataset.
 - [ ] Packed loader feeds the GPU efficiently on rehearsal hardware.
 - [ ] All core architecture families can train with common interfaces.
-- [ ] Custom architectures have reference correctness tests.
+- [x] Custom architectures have reference correctness tests.
 - [ ] Any Triton kernels match references.
 - [x] Evaluation metrics pass hand-calculated tests.
 - [ ] Cost/slippage model is frozen.
