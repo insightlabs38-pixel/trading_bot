@@ -35,16 +35,22 @@ _AWS_KEY_RE = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
 _GITHUB_TOKEN_RE = re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b")
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}")
 
+_DEFAULT_ALLOWED_PATTERNS = (
+    "src/trading_bot/models/**",
+    "src/trading_bot/training/trainer.py",
+)
+
 _DEFAULT_PROTECTED_PATTERNS = (
     "PLAN.md",
     "IMPLEMENTATION_PLAN.md",
     "docs/evaluation_contract.md",
     "docs/data_and_storage_plan.md",
+    "src/trading_bot/data/**",
     "src/trading_bot/evaluation/**",
-    "src/trading_bot/data/*split*",
-    "src/trading_bot/data/**/*split*",
+    "src/trading_bot/config/**",
     "configs/campaigns/**",
-    "src/trading_bot/scheduler/db.py",
+    "src/trading_bot/scheduler/**",
+    "src/trading_bot/recovery/**",
     ".github/**",
     "docker/**",
     "compose*.yml",
@@ -81,14 +87,24 @@ class DebugBundle(FrozenConfigModel):
 
 
 class ProtectedFilePolicy(FrozenConfigModel):
-    patterns: tuple[str, ...] = _DEFAULT_PROTECTED_PATTERNS
+    """Default-deny repair surface with explicit narrow code allow-list."""
+
+    allowed_patterns: tuple[str, ...] = _DEFAULT_ALLOWED_PATTERNS
+    protected_patterns: tuple[str, ...] = _DEFAULT_PROTECTED_PATTERNS
 
     def is_protected(self, path: str) -> bool:
         normalized = PurePosixPath(path.replace("\\", "/"))
         if normalized.is_absolute() or ".." in normalized.parts:
             return True
         normalized_text = normalized.as_posix()
-        return any(fnmatchcase(normalized_text, pattern) for pattern in self.patterns)
+        if any(
+            fnmatchcase(normalized_text, pattern)
+            for pattern in self.protected_patterns
+        ):
+            return True
+        return not any(
+            fnmatchcase(normalized_text, pattern) for pattern in self.allowed_patterns
+        )
 
     def require_allowed(self, paths: tuple[str, ...]) -> None:
         blocked = sorted(path for path in paths if self.is_protected(path))
