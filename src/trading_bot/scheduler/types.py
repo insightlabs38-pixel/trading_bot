@@ -94,12 +94,8 @@ _TRIAL_TRANSITIONS: dict[TrialState, frozenset[TrialState]] = {
     ),
     TrialState.COMPLETE: frozenset(),
     TrialState.PRUNED: frozenset(),
-    TrialState.RETRYABLE_FAILURE: frozenset(
-        {TrialState.QUARANTINED, TrialState.AI_REPAIR_PENDING}
-    ),
-    TrialState.TERMINAL_FAILURE: frozenset(
-        {TrialState.QUARANTINED, TrialState.AI_REPAIR_PENDING}
-    ),
+    TrialState.RETRYABLE_FAILURE: frozenset({TrialState.QUARANTINED, TrialState.AI_REPAIR_PENDING}),
+    TrialState.TERMINAL_FAILURE: frozenset({TrialState.QUARANTINED, TrialState.AI_REPAIR_PENDING}),
     TrialState.INTERRUPTED: frozenset({TrialState.QUARANTINED}),
     TrialState.QUARANTINED: frozenset({TrialState.AI_REPAIR_PENDING}),
     TrialState.AI_REPAIR_PENDING: frozenset(
