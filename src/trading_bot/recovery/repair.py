@@ -15,12 +15,20 @@ from pydantic import Field, JsonValue
 from trading_bot.config.base import FrozenConfigModel
 from trading_bot.config.schemas import AIRepairConfig
 from trading_bot.recovery.policy import RecoveryPolicy
-from trading_bot.recovery.types import GateResult, RepairProposal, RepairTier, RepairValidationResult
+from trading_bot.recovery.types import (
+    GateResult,
+    RepairProposal,
+    RepairTier,
+    RepairValidationResult,
+)
 
 _REDACTED = "<redacted>"
-_SECRET_KEY_RE = re.compile(r"(?i)(api[_-]?key|token|password|secret|authorization|credential|webhook)")
+_SECRET_KEY_RE = re.compile(
+    r"(?i)(api[_-]?key|token|password|secret|authorization|credential|webhook)"
+)
 _SECRET_ASSIGNMENT_RE = re.compile(
-    r"(?i)\b(api[_-]?key|token|password|secret|authorization|credential|webhook)\b\s*[:=]\s*[^\s,;]+"
+    r"(?i)\b(api[_-]?key|token|password|secret|authorization|credential|webhook)\b"
+    r"\s*[:=]\s*[^\s,;]+"
 )
 _AWS_KEY_RE = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
 _GITHUB_TOKEN_RE = re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b")
@@ -46,7 +54,9 @@ _DEFAULT_PROTECTED_PATTERNS = (
     "**/*secret*",
 )
 
-_FORBIDDEN_DATA_SUFFIXES = frozenset({".parquet", ".arrow", ".feather", ".csv", ".npy", ".npz"})
+_FORBIDDEN_DATA_SUFFIXES = frozenset(
+    {".parquet", ".arrow", ".feather", ".csv", ".npy", ".npz"}
+)
 
 
 class DebugBundle(FrozenConfigModel):
@@ -124,7 +134,9 @@ class RepairAuditLog:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def append(self, record: RepairAuditRecord) -> None:
-        line = json.dumps(record.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+        line = json.dumps(
+            record.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
+        )
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
             handle.flush()
@@ -141,10 +153,22 @@ class RepairAuditLog:
 
 
 def redact_text(value: str) -> str:
-    redacted = _SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}={_REDACTED}", value)
+    redacted = _SECRET_ASSIGNMENT_RE.sub(
+        lambda match: f"{match.group(1)}={_REDACTED}", value
+    )
     redacted = _AWS_KEY_RE.sub(_REDACTED, redacted)
     redacted = _GITHUB_TOKEN_RE.sub(_REDACTED, redacted)
     return _BEARER_RE.sub(f"Bearer {_REDACTED}", redacted)
+
+
+def _redact_json(value: JsonValue) -> JsonValue:
+    if isinstance(value, str):
+        return redact_text(value)
+    if isinstance(value, dict):
+        return redact_mapping(value)
+    if isinstance(value, list):
+        return [_redact_json(item) for item in value]
+    return value
 
 
 def redact_mapping(value: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
@@ -152,14 +176,8 @@ def redact_mapping(value: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
     for key, item in value.items():
         if _SECRET_KEY_RE.search(key):
             result[key] = _REDACTED
-        elif isinstance(item, str):
-            result[key] = redact_text(item)
-        elif isinstance(item, dict):
-            result[key] = redact_mapping(item)
-        elif isinstance(item, list):
-            result[key] = [redact_text(entry) if isinstance(entry, str) else entry for entry in item]
         else:
-            result[key] = item
+            result[key] = _redact_json(item)
     return result
 
 
@@ -180,12 +198,16 @@ def build_debug_bundle(
         suffix = PurePosixPath(path).suffix.lower()
         if suffix in _FORBIDDEN_DATA_SUFFIXES:
             raise ValueError(f"debug bundle refuses raw/licensed data file {path!r}")
+    sanitized_environment = {
+        key: (_REDACTED if _SECRET_KEY_RE.search(key) else redact_text(value))
+        for key, value in environment.items()
+    }
     bundle = DebugBundle(
         trial_id=trial_id,
         failure_class=failure_class,
         stack_trace=redact_text(stack_trace),
         recent_logs=redact_text(recent_logs),
-        environment={key: (_REDACTED if _SECRET_KEY_RE.search(key) else redact_text(value)) for key, value in environment.items()},
+        environment=sanitized_environment,
         tensor_shapes=dict(tensor_shapes),
         config=redact_mapping(config),
         source_files={path: redact_text(text) for path, text in source_files.items()},
@@ -236,7 +258,13 @@ class AIRepairCoordinator:
             attempts.append(self._attempt(bundle, self.reasoning_client, tier="reasoning"))
         return tuple(attempts)
 
-    def _attempt(self, bundle: DebugBundle, client: RepairClient, *, tier: RepairTier) -> RepairAttempt:
+    def _attempt(
+        self,
+        bundle: DebugBundle,
+        client: RepairClient,
+        *,
+        tier: RepairTier,
+    ) -> RepairAttempt:
         timeout = (
             self.policy.repair_primary_timeout_seconds
             if tier == "primary"
@@ -249,10 +277,10 @@ class AIRepairCoordinator:
                 timeout_seconds=timeout,
                 max_output_bytes=self.policy.repair_max_output_bytes,
             )
-            return RepairAttempt(
-                tier=tier,
-                proposal=parse_repair_proposal(raw, max_output_bytes=self.policy.repair_max_output_bytes),
+            proposal = parse_repair_proposal(
+                raw, max_output_bytes=self.policy.repair_max_output_bytes
             )
+            return RepairAttempt(tier=tier, proposal=proposal)
         except Exception as exc:  # provider failures must never stop the campaign
             return RepairAttempt(tier=tier, error=f"{type(exc).__name__}: {exc}")
 
