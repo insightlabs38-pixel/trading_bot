@@ -40,16 +40,22 @@ def run_cpu_golden_canary(
     active = spec or GoldenCanarySpec()
     xs = (0.0, 1.0, 2.0, 3.0)
     expected = (1.0, 3.0, 5.0, 7.0)
-    model = {"slope": 2.0, "intercept": 1.0, "model_id": active.model_id}
+    slope = 2.0
+    intercept = 1.0
+    model: dict[str, float | str] = {
+        "slope": slope,
+        "intercept": intercept,
+        "model_id": active.model_id,
+    }
 
-    predictions = tuple(model["slope"] * value + model["intercept"] for value in xs)
+    predictions = tuple(slope * value + intercept for value in xs)
     mse = sum((actual - target) ** 2 for actual, target in zip(predictions, expected, strict=True)) / len(xs)
 
     started = perf_counter()
     sink = 0.0
     for _ in range(active.benchmark_iterations):
         for value in xs:
-            sink += model["slope"] * value + model["intercept"]
+            sink += slope * value + intercept
     elapsed = perf_counter() - started
     if sink <= 0.0 or elapsed <= 0.0:
         raise AssertionError("canary benchmark produced an invalid timing result")
