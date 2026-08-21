@@ -11,7 +11,10 @@ from trading_bot.scheduler.types import TrialSpec
 
 
 def derive_repaired_child(parent: TrialSpec, *, proposal_sha256: str) -> TrialSpec:
-    if len(proposal_sha256) != 64 or any(character not in "0123456789abcdef" for character in proposal_sha256):
+    valid_digest = len(proposal_sha256) == 64 and all(
+        character in "0123456789abcdef" for character in proposal_sha256
+    )
+    if not valid_digest:
         raise ValueError("proposal_sha256 must be a lowercase SHA-256 digest")
     child_config = cast(dict[str, JsonValue], copy.deepcopy(parent.config))
     child_config["repair_provenance"] = {"proposal_sha256": proposal_sha256}
