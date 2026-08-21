@@ -1,10 +1,10 @@
 """CPU-reference advanced model families for Phase 8 screening.
 
-The implementations in this module are deliberately dependency-light PyTorch references.
-They preserve the common :class:`TrainingBatch` / :class:`ModelOutput` boundary so the
-same trainer, checkpoints, prediction artifacts, and evaluator can exercise every
-family on standard CPU CI. Hardware-specialized kernels and external pretrained
-checkpoints remain separate acceptance concerns.
+These implementations are dependency-light PyTorch references. They preserve the
+common ``TrainingBatch`` / ``ModelOutput`` boundary so the same trainer,
+checkpoints, prediction artifacts, and evaluator can exercise every family on
+standard CPU CI. Hardware-specialized kernels and external pretrained checkpoints
+remain separate acceptance concerns.
 """
 
 from __future__ import annotations
@@ -110,7 +110,10 @@ class FoundationModelIdentity:
         if any(not value.strip() for value in (self.provider, self.model_id, self.revision)):
             raise ValueError("foundation model identity fields must not be blank")
         checksum = self.checkpoint_sha256.lower()
-        if len(checksum) != 64 or any(character not in "0123456789abcdef" for character in checksum):
+        invalid_digest = len(checksum) != 64 or any(
+            character not in "0123456789abcdef" for character in checksum
+        )
+        if invalid_digest:
             raise ValueError("foundation checkpoint_sha256 must be a 64-character hex digest")
 
 
@@ -120,14 +123,14 @@ class FoundationBackbone(nn.Module):
     output_features: int
 
     def forward(self, sequence: Tensor) -> Tensor:
-        """Return either ``[batch, hidden]`` or ``[batch, time, hidden]`` embeddings."""
+        """Return ``[batch, hidden]`` or ``[batch, time, hidden]`` embeddings."""
         raise NotImplementedError
 
 
 class FrozenFoundationAdapter(TradingModel):
     """Adapt a verified caller-supplied frozen foundation backbone to common heads.
 
-    This class intentionally performs no network access and does not select/download a
+    This class performs no network access and does not select or download a
     checkpoint. Selection, licensing, artifact acquisition, and real checkpoint
     acceptance remain external to the CPU reference gate.
     """
@@ -312,7 +315,7 @@ class ITransformerReturnModel(TradingModel):
 
 
 class _SelectiveStateSpaceBlock(nn.Module):
-    """Readable selective state-space recurrence used by the Mamba reference family."""
+    """Readable selective state-space recurrence for the Mamba reference family."""
 
     def __init__(self, model_features: int) -> None:
         super().__init__()
@@ -378,7 +381,9 @@ class MambaReferenceReturnModel(TradingModel):
             raise ValueError("input sequence exceeds configured Mamba reference context length")
         hidden = self.input_projection(sequence)
         for block in self.blocks:
-            hidden = block(hidden)
+            if not isinstance(block, _SelectiveStateSpaceBlock):
+                raise TypeError("Mamba reference block registry contains an invalid module")
+            hidden = block.forward(hidden)
         return self.heads.forward(self.final_norm(hidden[:, -1]))
 
 
@@ -475,7 +480,10 @@ class TemporalCrossSectionalTransformerReturnModel(TradingModel):
             batch_first=True,
             norm_first=False,
         )
-        self.temporal_encoder = nn.TransformerEncoder(temporal_layer, num_layers=num_layers)
+        self.temporal_encoder = nn.TransformerEncoder(
+            temporal_layer,
+            num_layers=num_layers,
+        )
         self.cross_sectional_encoder = nn.TransformerEncoder(
             cross_sectional_layer,
             num_layers=num_layers,
@@ -558,8 +566,10 @@ def advanced_model_spec(
         model_features, num_layers, num_heads = 12, 1, 2
     elif scale == "medium":
         model_features, num_layers, num_heads = 24, 2, 4
-    else:
+    elif scale == "large":
         model_features, num_layers, num_heads = 48, 3, 4
+    else:
+        raise AssertionError(f"unhandled advanced scale {scale!r}")
     patch_length = min(4, max_sequence_length)
     patch_stride = min(2, patch_length)
     graph_top_k = 2 if scale == "small" else 4 if scale == "medium" else 8
@@ -580,49 +590,56 @@ def advanced_model_spec(
 
 def build_advanced_model(spec: AdvancedModelSpec) -> TradingModel:
     """Construct one advanced family from its versionable reference specification."""
-    common = {
-        "input_features": spec.input_features,
-        "model_features": spec.model_features,
-        "max_sequence_length": spec.max_sequence_length,
-    }
     if spec.architecture == "patchtst":
         return PatchTSTReturnModel(
-            **common,
+            input_features=spec.input_features,
+            model_features=spec.model_features,
             num_heads=spec.num_heads,
             num_layers=spec.num_layers,
             feedforward_features=spec.feedforward_features,
             patch_length=spec.patch_length,
             patch_stride=spec.patch_stride,
+            max_sequence_length=spec.max_sequence_length,
         )
     if spec.architecture == "itransformer":
         return ITransformerReturnModel(
-            **common,
+            input_features=spec.input_features,
+            model_features=spec.model_features,
             num_heads=spec.num_heads,
             num_layers=spec.num_layers,
             feedforward_features=spec.feedforward_features,
+            max_sequence_length=spec.max_sequence_length,
         )
     if spec.architecture == "mamba_reference":
         return MambaReferenceReturnModel(
-            **common,
+            input_features=spec.input_features,
+            model_features=spec.model_features,
             num_layers=spec.num_layers,
+            max_sequence_length=spec.max_sequence_length,
         )
     if spec.architecture == "vsn_lstm":
         return VSNLSTMReturnModel(
-            **common,
+            input_features=spec.input_features,
+            model_features=spec.model_features,
             num_layers=spec.num_layers,
+            max_sequence_length=spec.max_sequence_length,
         )
     if spec.architecture == "temporal_cross_sectional_transformer":
         return TemporalCrossSectionalTransformerReturnModel(
-            **common,
+            input_features=spec.input_features,
+            model_features=spec.model_features,
             num_heads=spec.num_heads,
             num_layers=spec.num_layers,
             feedforward_features=spec.feedforward_features,
+            max_sequence_length=spec.max_sequence_length,
         )
     if spec.architecture == "temporal_graph":
         return TemporalGraphReturnModel(
-            **common,
+            input_features=spec.input_features,
+            model_features=spec.model_features,
             num_layers=spec.num_layers,
             graph_top_k=spec.graph_top_k,
+            max_sequence_length=spec.max_sequence_length,
         )
     raise AssertionError(f"unhandled advanced architecture {spec.architecture!r}")
 
@@ -632,8 +649,12 @@ def profile_advanced_model(model: nn.Module) -> AdvancedModelProfile:
     parameters = tuple(model.parameters())
     buffers = tuple(model.buffers())
     parameter_count = sum(parameter.numel() for parameter in parameters)
-    trainable_count = sum(parameter.numel() for parameter in parameters if parameter.requires_grad)
-    parameter_bytes = sum(parameter.numel() * parameter.element_size() for parameter in parameters)
+    trainable_count = sum(
+        parameter.numel() for parameter in parameters if parameter.requires_grad
+    )
+    parameter_bytes = sum(
+        parameter.numel() * parameter.element_size() for parameter in parameters
+    )
     buffer_bytes = sum(buffer.numel() * buffer.element_size() for buffer in buffers)
     return AdvancedModelProfile(
         parameter_count=parameter_count,
