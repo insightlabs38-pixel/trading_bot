@@ -1,0 +1,302 @@
+schema_version: 1
+campaign_id: h200-tournament-v1
+frozen: true
+screening_objective_id: excess_huber_15m
+
+architectures:
+  - family: ridge
+    kind: classical
+    pool: mandatory
+    searchable: false
+    scales:
+      - name: reference
+        parameters: {alpha: 1.0}
+    objective_ids: [excess_mse_15m]
+    search_axes: []
+
+  - family: elastic_net
+    kind: classical
+    pool: mandatory
+    searchable: false
+    scales:
+      - name: reference
+        parameters: {alpha: 0.001, l1_ratio: 0.5}
+    objective_ids: [excess_mse_15m]
+    search_axes: []
+
+  - family: logistic_direction
+    kind: classical
+    pool: optional
+    searchable: false
+    scales:
+      - name: reference
+        parameters: {}
+    objective_ids: [direction_bce_15m]
+    search_axes: []
+
+  - family: lightgbm
+    kind: classical
+    pool: mandatory
+    searchable: false
+    scales:
+      - name: reference
+        parameters: {n_estimators: 16, max_depth: 3}
+    objective_ids: [excess_mse_15m, excess_huber_15m]
+    search_axes: []
+
+  - family: xgboost
+    kind: classical
+    pool: mandatory
+    searchable: false
+    scales:
+      - name: reference
+        parameters: {n_estimators: 16, max_depth: 3}
+    objective_ids: [excess_mse_15m, excess_huber_15m]
+    search_axes: []
+
+  - family: mlp
+    kind: neural_baseline
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {hidden_features: 16}
+      - name: medium
+        parameters: {hidden_features: 32}
+      - name: large
+        parameters: {hidden_features: 64}
+    objective_ids: &neural_objectives
+      [excess_huber_15m, ranking_15m, direction_bce_15m, multitask_return_rank_direction_15m]
+
+  - family: gru
+    kind: neural_baseline
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {hidden_features: 12}
+      - name: medium
+        parameters: {hidden_features: 24}
+      - name: large
+        parameters: {hidden_features: 48}
+    objective_ids: *neural_objectives
+
+  - family: lstm
+    kind: neural_baseline
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {hidden_features: 12}
+      - name: medium
+        parameters: {hidden_features: 24}
+      - name: large
+        parameters: {hidden_features: 48}
+    objective_ids: *neural_objectives
+
+  - family: tcn
+    kind: neural_baseline
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {hidden_features: 12, kernel_size: 3}
+      - name: medium
+        parameters: {hidden_features: 24, kernel_size: 3}
+      - name: large
+        parameters: {hidden_features: 48, kernel_size: 3}
+    objective_ids: *neural_objectives
+
+  - family: causal_transformer
+    kind: neural_baseline
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {model_features: 16, num_heads: 4, num_layers: 1, feedforward_features: 32}
+      - name: medium
+        parameters: {model_features: 32, num_heads: 4, num_layers: 2, feedforward_features: 64}
+      - name: large
+        parameters: {model_features: 64, num_heads: 8, num_layers: 3, feedforward_features: 128}
+    objective_ids: *neural_objectives
+
+  - family: patchtst
+    kind: advanced
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {model_features: 12, num_layers: 1, num_heads: 2, feedforward_features: 24, patch_length: 4, patch_stride: 2}
+      - name: medium
+        parameters: {model_features: 24, num_layers: 2, num_heads: 4, feedforward_features: 48, patch_length: 4, patch_stride: 2}
+      - name: large
+        parameters: {model_features: 48, num_layers: 3, num_heads: 4, feedforward_features: 96, patch_length: 4, patch_stride: 2}
+    objective_ids: *neural_objectives
+
+  - family: itransformer
+    kind: advanced
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {model_features: 12, num_layers: 1, num_heads: 2, feedforward_features: 24}
+      - name: medium
+        parameters: {model_features: 24, num_layers: 2, num_heads: 4, feedforward_features: 48}
+      - name: large
+        parameters: {model_features: 48, num_layers: 3, num_heads: 4, feedforward_features: 96}
+    objective_ids: *neural_objectives
+
+  - family: mamba_reference
+    kind: advanced
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {model_features: 12, num_layers: 1}
+      - name: medium
+        parameters: {model_features: 24, num_layers: 2}
+      - name: large
+        parameters: {model_features: 48, num_layers: 3}
+    objective_ids: *neural_objectives
+
+  - family: vsn_lstm
+    kind: advanced
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {model_features: 12, num_layers: 1}
+      - name: medium
+        parameters: {model_features: 24, num_layers: 2}
+      - name: large
+        parameters: {model_features: 48, num_layers: 3}
+    objective_ids: *neural_objectives
+
+  - family: temporal_cross_sectional_transformer
+    kind: advanced
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {model_features: 12, num_layers: 1, num_heads: 2, feedforward_features: 24}
+      - name: medium
+        parameters: {model_features: 24, num_layers: 2, num_heads: 4, feedforward_features: 48}
+      - name: large
+        parameters: {model_features: 48, num_layers: 3, num_heads: 4, feedforward_features: 96}
+    objective_ids: *neural_objectives
+
+  - family: temporal_graph
+    kind: advanced
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {model_features: 12, num_layers: 1, graph_top_k: 2}
+      - name: medium
+        parameters: {model_features: 24, num_layers: 2, graph_top_k: 4}
+      - name: large
+        parameters: {model_features: 48, num_layers: 3, graph_top_k: 8}
+    objective_ids: *neural_objectives
+
+  - family: market_mixer
+    kind: custom
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {model_features: 16, num_heads: 2, num_decays: 3}
+      - name: medium
+        parameters: {model_features: 32, num_heads: 4, num_decays: 4}
+      - name: large
+        parameters: {model_features: 64, num_heads: 4, num_decays: 6}
+    objective_ids: *neural_objectives
+
+  - family: heterogeneous_moe
+    kind: custom
+    pool: mandatory
+    scales:
+      - name: small
+        parameters: {model_features: 16, num_layers: 1, num_heads: 2, feedforward_features: 32, num_decays: 3, moe_top_k: 2, include_frequency_expert: true}
+      - name: medium
+        parameters: {model_features: 32, num_layers: 2, num_heads: 4, feedforward_features: 64, num_decays: 4, moe_top_k: 2, include_frequency_expert: true}
+      - name: large
+        parameters: {model_features: 64, num_layers: 3, num_heads: 4, feedforward_features: 128, num_decays: 6, moe_top_k: 2, include_frequency_expert: true}
+    objective_ids: *neural_objectives
+
+  - family: foundation_adapter
+    kind: foundation
+    pool: optional
+    searchable: false
+    external_artifact_required: true
+    scales:
+      - name: reference
+        parameters: {}
+    objective_ids: *neural_objectives
+    search_axes: []
+
+objectives:
+  - objective_id: excess_mse_15m
+    objective: {kind: excess_return, horizons_minutes: [15], loss: mse}
+    required_heads: [return]
+
+  - objective_id: excess_huber_15m
+    objective: {kind: excess_return, horizons_minutes: [15], loss: huber}
+    required_heads: [return]
+
+  - objective_id: ranking_15m
+    objective: {kind: ranking, horizons_minutes: [15], loss: pairwise_rank}
+    required_heads: [rank]
+
+  - objective_id: direction_bce_15m
+    objective: {kind: direction, horizons_minutes: [15], loss: bce}
+    required_heads: [direction]
+
+  - objective_id: multitask_return_rank_direction_15m
+    objective:
+      kind: multitask
+      horizons_minutes: [15]
+      loss: composite
+      task_weights: {expected_return: 1.0, rank_score: 0.5, direction_probability: 0.25}
+    required_heads: [return, rank, direction]
+
+  - objective_id: multitask_return_rank_vol_direction_15m
+    selection: planned_not_selected
+    objective:
+      kind: multitask
+      horizons_minutes: [15]
+      loss: composite
+      task_weights: {expected_return: 1.0, rank_score: 0.5, volatility: 0.25, direction_probability: 0.25}
+    required_heads: [return, rank, volatility, direction]
+
+  - objective_id: multi_horizon_huber_15_30m
+    selection: planned_not_selected
+    objective: {kind: excess_return, horizons_minutes: [15, 30], loss: huber}
+    required_heads: [return]
+
+  - objective_id: distributional_quantile_15m
+    selection: planned_not_selected
+    objective: {kind: distributional, horizons_minutes: [15], loss: quantile}
+    required_heads: [quantiles]
+
+search:
+  learning_rates: [0.0001, 0.0003, 0.001]
+  weight_decays: [0.0, 0.0001, 0.001]
+  dropouts: [0.0, 0.1, 0.2]
+  context_lengths: [32, 64, 128]
+  batch_constraints:
+    - {microbatch_size: 64, gradient_accumulation_steps: 4, effective_batch_size: 256}
+    - {microbatch_size: 128, gradient_accumulation_steps: 2, effective_batch_size: 256}
+    - {microbatch_size: 256, gradient_accumulation_steps: 1, effective_batch_size: 256}
+
+seeds:
+  screening_seed: 17
+  finalist_seeds: [17, 29, 43]
+
+budgets:
+  - stage: calibration
+    fraction_of_family_full_budget: 0.05
+    target_configurations: 9
+  - stage: screening
+    fraction_of_family_full_budget: 0.15
+    target_configurations: 66
+    promote_configurations: 18
+  - stage: promotion
+    fraction_of_family_full_budget: 0.50
+    target_configurations: 18
+    promote_configurations: 6
+  - stage: objective_search
+    fraction_of_family_full_budget: 0.50
+    target_configurations: 18
+    promote_configurations: 4
+  - stage: finalists
+    fraction_of_family_full_budget: 1.0
+    target_configurations: 4
+    use_all_finalist_seeds: true
