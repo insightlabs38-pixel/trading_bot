@@ -1,7 +1,7 @@
 # Detailed Implementation Plan
 
 Status: **ACTIVE IMPLEMENTATION TRACKER**  
-Last updated: **2026-08-20**
+Last updated: **2026-08-21**
 
 This document is the detailed execution plan for `trading_bot`. It is intended to be usable by the repository owner, a future human contributor, or an AI coding agent to answer four questions quickly:
 
@@ -12,11 +12,11 @@ This document is the detailed execution plan for `trading_bot`. It is intended t
 
 `PLAN.md` defines the project intent and frozen research decisions. `docs/implementation_roadmap.md` is the high-level milestone view. **This file is the implementation source of truth and progress checklist.**
 
-### Reconciliation note — 2026-08-20
+### Reconciliation note — 2026-08-21
 
-The Phase 0–11 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; Phase 7 is complete on the CPU/reference baseline gate; the Phase 8 CPU/reference core-architecture gate has passed while selected pretrained-foundation and GPU/H200 acceptance remain open; the Phase 9 CPU/reference custom-architecture/correctness gate has passed while Triton and target-GPU optimization acceptance remain open; Phase 10 is complete on the version-controlled campaign search-manifest gate; and Phase 11 is complete on the CPU/simulation deadline-aware scheduler gate. Real H200 utilization/VRAM/throughput values remain target-hardware observations for the production campaign, while deterministic failure classification, recovery/circuit-breaker policy, and AI repair remain Phase 12. Remaining open items require external provider/data choices, frozen production methodology/dates, finalized production-data validation, selected external model artifacts, GPU/H200/Triton acceptance, or later fault-tolerance/operations integration.
+The Phase 0–12 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; Phase 7 is complete on the CPU/reference baseline gate; the Phase 8 CPU/reference core-architecture gate has passed while selected pretrained-foundation and GPU/H200 acceptance remain open; the Phase 9 CPU/reference custom-architecture/correctness gate has passed while Triton and target-GPU optimization acceptance remain open; Phase 10 is complete on the version-controlled campaign search-manifest gate; Phase 11 is complete on the CPU/simulation deadline-aware scheduler gate; and Phase 12 has passed its CPU deterministic recovery/repair-sandbox gate while real GPU/H200/Triton recovery and external AI-provider acceptance remain open. Remaining open items require external provider/data choices, frozen production methodology/dates, finalized production-data validation, selected external model artifacts, GPU/H200/Triton acceptance, or later operations/dress-rehearsal integration.
 
-CPU-only GitHub Actions verification now runs on one standard `ubuntu-latest` hosted runner using Python 3.12 and the committed `uv.lock`. The permanent read-only gate runs Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite. GPU/Triton/H200 checks remain intentionally excluded until compatible GPU infrastructure is available.
+CPU-only GitHub Actions verification runs on one standard `ubuntu-latest` hosted runner using Python 3.12 and the committed `uv.lock`. The permanent read-only gate runs Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite. GPU/Triton/H200 checks remain intentionally excluded until compatible GPU infrastructure is available.
 
 ---
 
@@ -103,7 +103,7 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | 9. Custom architectures + Triton | **IN PROGRESS — CPU/reference custom gate passed; Triton/GPU acceptance pending** | Yes |
 | 10. Experiment configuration/search spaces | **COMPLETE — campaign search-manifest gate passed** | Yes |
 | 11. H200 campaign scheduler | **COMPLETE — CPU/simulation scheduler gate passed** | Yes |
-| 12. Fault tolerance + AI repair | Not started | Yes |
+| 12. Fault tolerance + AI repair | **IN PROGRESS — CPU deterministic recovery/repair-sandbox gate passed; GPU/provider acceptance pending** | Yes |
 | 13. Observability + Discord | Not started | Yes |
 | 14. Docker/Compose environments | Not started | Yes |
 | 15. Campaign simulation + dress rehearsal | Not started | Yes |
@@ -985,54 +985,54 @@ In simulation mode, the controller finishes a compressed campaign with correct l
 
 ## Deterministic failure classification
 
-- [ ] CUDA OOM.
-- [ ] NaN/Inf.
-- [ ] transient process crash.
-- [ ] Triton compile failure.
-- [ ] illegal memory access.
-- [ ] stale heartbeat/hang.
-- [ ] corrupted data shard.
-- [ ] checkpoint corruption.
-- [ ] evaluator failure.
-- [ ] storage failure.
-- [ ] disk pressure.
-- [ ] infrastructure/GPU failure cluster.
-- [ ] deterministic configuration error.
+- [x] CUDA OOM — deterministic log-signature classification is CPU-tested; real CUDA reproduction remains external.
+- [x] NaN/Inf.
+- [x] transient process crash.
+- [x] Triton compile failure — deterministic log-signature classification is CPU-tested; real Triton runtime remains external.
+- [x] illegal memory access — deterministic log-signature classification is CPU-tested; real CUDA reproduction remains external.
+- [x] stale heartbeat/hang.
+- [x] corrupted data shard.
+- [x] checkpoint corruption.
+- [x] evaluator failure.
+- [x] storage failure.
+- [x] disk pressure.
+- [x] infrastructure/GPU failure cluster — infrastructure-like failure grouping and circuit-breaker policy are CPU-tested; real GPU cluster evidence remains external.
+- [x] deterministic configuration error.
 
 ## Recovery policies
 
-- [ ] Bounded retry count.
-- [ ] OOM child trial with reduced microbatch and preserved effective batch where possible.
-- [ ] Reference PyTorch fallback for custom kernel failures.
-- [ ] Last-good-checkpoint recovery.
-- [ ] Evaluator retry independent of trainer.
-- [ ] Storage retry independent of training.
-- [ ] Quarantine irrecoverable trials.
+- [x] Bounded retry count.
+- [x] OOM child trial with reduced microbatch and preserved effective batch where possible — child derivation is CPU-tested; real CUDA continuation remains external.
+- [x] Reference PyTorch fallback for custom kernel failures — immutable reference-backend child policy is CPU-tested; real Triton/GPU execution remains external.
+- [x] Last-good-checkpoint recovery decision.
+- [x] Evaluator retry independent of trainer.
+- [x] Storage retry independent of training.
+- [x] Quarantine irrecoverable trials.
 
 ## Heartbeats/hangs
 
-- [ ] Worker heartbeat file/event.
-- [ ] Explicit COMPILING/DATALOADING/TRAINING/CHECKPOINTING states.
-- [ ] State-specific timeout thresholds.
-- [ ] Hang kill/recovery behavior.
+- [x] Worker heartbeat file/event.
+- [x] Explicit COMPILING/DATALOADING/TRAINING/CHECKPOINTING states.
+- [x] State-specific timeout thresholds.
+- [x] Hang kill/recovery behavior — Phase 11 CPU CI covers TERM→KILL process-group isolation; Phase 12 adds stale-heartbeat classification and bounded fresh-process retry decisions. Real GPU-hang recovery remains a Phase 15/17 acceptance item.
 
 ## Circuit breaker
 
-- [ ] Detect repeated infrastructure-like failures in short window.
-- [ ] Pause new launches.
-- [ ] Run GPU smoke test.
-- [ ] Verify disk/data/storage basics.
-- [ ] Resume only after health gate passes.
+- [x] Detect repeated infrastructure-like failures in short window.
+- [x] Pause new launches.
+- [ ] Run GPU smoke test. — **GPU-DEPENDENT; the typed gate fails closed when real GPU evidence is unavailable.**
+- [x] Verify disk/data/storage basics.
+- [x] Resume only after health gate passes — CPU tests require all named gates and use a clearly synthetic successful GPU fixture only to exercise the closing branch.
 
 ## Golden canary
 
-- [ ] Small known dataset.
-- [ ] Small known model/config.
-- [ ] Expected finite loss range.
-- [ ] Save/load test.
-- [ ] Evaluation test.
-- [ ] Storage upload test.
-- [ ] Throughput baseline for regression detection.
+- [x] Small known dataset.
+- [x] Small known model/config.
+- [x] Expected finite loss range.
+- [x] Save/load test.
+- [x] Evaluation test.
+- [x] Storage upload test.
+- [x] Throughput baseline for regression detection.
 
 ## AI repair service
 
@@ -1050,36 +1050,48 @@ AI repair works asynchronously
 
 Implement:
 
-- [ ] Sanitized debugging bundle generator.
-- [ ] Secret/data redaction.
-- [ ] Fast non-thinking model first tier.
-- [ ] Strict client-side latency/output limits.
-- [ ] Structured JSON repair schema.
-- [ ] Isolated Git worktree/sandbox.
-- [ ] Protected-file policy.
-- [ ] Static validation gate.
-- [ ] Unit-test gate.
-- [ ] GPU smoke gate.
-- [ ] Regression gate.
-- [ ] New child trial for successful repair.
-- [ ] Complete audit log of AI request/response/diff/tests.
-- [ ] Optional slower reasoning escalation only for high-value unresolved trials.
-- [ ] AI failure/unavailability never blocks campaign.
+- [x] Sanitized debugging bundle generator.
+- [x] Secret/data redaction.
+- [x] Fast non-thinking model first tier — provider-neutral primary tier is implemented and ordered before optional reasoning escalation; an external provider is not yet selected/accepted.
+- [x] Strict client-side latency/output limits.
+- [x] Structured JSON repair schema.
+- [x] Isolated Git worktree/sandbox.
+- [x] Protected-file policy — default deny with an explicit narrow model/trainer allow-list.
+- [x] Static validation gate.
+- [x] Unit-test gate.
+- [ ] GPU smoke gate. — **GPU-DEPENDENT; CPU validation deliberately returns an unavailable/red gate.**
+- [x] Regression gate.
+- [x] New child trial for successful repair.
+- [x] Complete audit log of AI request/response/diff/tests — append-only fsynced records capture sanitized request/proposal identities, changed paths, validation results, and outcome without persisting secrets/raw licensed data.
+- [x] Optional slower reasoning escalation only for high-value unresolved trials.
+- [x] AI failure/unavailability never blocks campaign control.
 
 Protected from AI modification at minimum:
 
-- [ ] final-holdout definitions;
-- [ ] split definitions;
-- [ ] evaluation contract;
-- [ ] transaction-cost rules;
-- [ ] promotion rules;
-- [ ] campaign DB;
-- [ ] credentials;
-- [ ] cloud-instance controls.
+- [x] final-holdout definitions;
+- [x] split definitions;
+- [x] evaluation contract;
+- [x] transaction-cost rules;
+- [x] promotion rules;
+- [x] campaign DB;
+- [x] credentials;
+- [x] cloud-instance controls.
+
+### Progress note — 2026-08-21
+
+- `configs/campaigns/recovery_policy_v1.yaml` freezes bounded process/non-finite/evaluator/storage retries, state-specific heartbeat timeouts, circuit-breaker window/threshold/cooldown, disk floor, and repair timeout/output/bundle limits separately from scientific configuration.
+- `src/trading_bot/recovery` implements typed evidence/classification, immutable OOM/reference/repaired child lineage, heartbeat I/O, circuit breaker, CPU health checks/golden canary, sanitized provider-neutral repair requests, detached worktree application, ordered validation gates, and append-only audit records.
+- The repair boundary is default deny: only `src/trading_bot/models/**` and `src/trading_bot/training/trainer.py` are allowed by the production policy; data/evaluation/config/campaign/scheduler/recovery/infrastructure/credential surfaces are protected.
+- CPU CI validates CUDA/Triton failure strings only as deterministic evidence fixtures. It does not claim to reproduce CUDA OOM, illegal memory access, Triton compilation, H200 faults, or GPU recovery.
+- Hardened implementation read-only Python 3.12 CI run `32445570993` / job `96664409164` tested head `5c9da9f4edae005d0106c9d8dc95aa3d87a58697` via synthetic merge `e58b5e4ca9408b0ed278385f1208fcb183af0e13`; Ruff/format passed across 141 files, strict mypy passed across 81 source files, compileall passed, and pytest reported 388 passed / 1 skipped in 18.37s.
+- The sole skip remains the unrelated opt-in Phase 2 real-S3 provider gate. Detailed Phase 12 evidence and remaining hardware/provider acceptance are recorded in `docs/progress/phase_12.md`.
+- Remaining acceptance is real GPU smoke plus actual CUDA/Triton/H200 recovery evidence, external AI-provider exercise, and campaign-level proof during the Phase 15 fault-injection dress rehearsal that useful GPU work continues while repair is isolated.
 
 ## Gate
 
 Injected unknown/custom-code failures can be quarantined without idling the H200. Successful AI repairs only re-enter the queue after deterministic validation.
+
+**CPU DETERMINISTIC RECOVERY/REPAIR-SANDBOX GATE PASSED.** CPU CI verifies deterministic classification/quarantine, bounded lineage-preserving recovery decisions, stale-heartbeat/circuit-breaker behavior, a known-good canary, a default-deny repair sandbox, and fail-closed requeue eligibility. Phase 12 remains **IN PROGRESS** until real GPU/H200/Triton smoke/recovery behavior and an external repair provider are exercised; CPU fixtures are not substituted for those acceptance items.
 
 ---
 
@@ -1539,9 +1551,9 @@ Every material run should record:
 - [x] `.env` excluded.
 - [x] Vendor/storage/Discord/AI keys designed for runtime injection.
 - [ ] Broker credential runtime integration — broker layer not implemented yet.
-- [ ] AI debugging context sanitizer — Phase 12.
+- [x] AI debugging context sanitizer — Phase 12 recursively redacts secret-like data and rejects raw/licensed market-data attachments.
 - [x] Vendor acquisition rejects secret-like durable request/response metadata.
-- [ ] Licensed market data external-AI redaction gate — Phase 12.
+- [x] Licensed market data external-AI redaction gate — Phase 12 debug bundles reject raw market-data file types and default-deny repair permissions protect data paths.
 - [ ] Production broker credentials isolated from research containers — Phase 14/19.
 
 ## Versioning
@@ -1549,8 +1561,8 @@ Every material run should record:
 - [x] Dataset/stage artifact versioning primitives are immutable/content-addressed.
 - [x] Campaign configs immutable once campaign starts — Phase 11 restart validates the exact frozen Phase 10 manifest hash/JSON and refuses silent deadline changes.
 - [x] Trial configs immutable — Phase 11 stores canonical config JSON/SHA-256 and creates new child rows for retries/promotions instead of mutating trial identity.
-- [ ] Behavior-changing bug fix creates a new child trial/version — scheduler enforcement not yet implemented.
-- [ ] AI-generated patches are committed/audited before being treated as valid experiment code — Phase 12.
+- [x] Behavior-changing recovery/repair creates a new child trial/version — Phase 12 OOM/reference/repair derivations preserve parent/root lineage rather than mutating the failed trial.
+- [ ] AI-generated patches are committed/audited before being treated as valid experiment code — detached-worktree application and append-only audit are implemented, but production commit publication plus real GPU validation remains open.
 
 ## Performance discipline
 
@@ -1596,15 +1608,15 @@ Current recommended sequence, reconciled to implemented work:
 13. [x] Advanced/core model families — CPU/reference core gate; external foundation/GPU acceptance remains.
 14. [x] Custom Market Mixer/reference custom operators — CPU/reference correctness gate; Triton/GPU optimization acceptance remains.
 15. [x] Version-controlled campaign registry/search-space manifest.
-16. [x] Campaign scheduler/state DB/deadline/successive-halving simulation — deterministic fault classification/recovery remains Phase 12.
+16. [x] Campaign scheduler/state DB/deadline/successive-halving simulation — CPU/simulation scheduler gate passed.
 17. [ ] Discord/telemetry/sync services.
-18. [ ] AI repair sandbox.
+18. [x] AI repair sandbox — CPU deterministic recovery/repair-sandbox gate passed; real GPU/provider acceptance remains.
 19. [ ] CPU/GPU Docker images and Compose orchestration.
 20. [ ] Scheduler simulation and full fault-injection dress rehearsal.
 21. [ ] Full production data build/staging.
 22. [ ] H200 campaign.
 
-External production/hardware/model-artifact blockers should be closed as credentials, frozen production data/methodology, selected pretrained checkpoints, and GPU/Triton infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, baseline-model, advanced-core, custom-reference, campaign-manifest, and scheduler-simulation gates.
+External production/hardware/model-artifact blockers should be closed as credentials, frozen production data/methodology, selected pretrained checkpoints, and GPU/Triton infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, baseline-model, advanced-core, custom-reference, campaign-manifest, scheduler-simulation, and deterministic-recovery/repair-sandbox gates.
 
 ---
 
@@ -1624,14 +1636,14 @@ The H200 should not be rented for the real campaign until all of the following c
 - [x] Campaign YAML/search spaces are frozen.
 - [x] Scheduler simulation passes — compressed Phase 11 restart/retry/promotion/deadline/drain gate is green in CPU CI.
 - [ ] Real shortened campaign passes.
-- [ ] OOM recovery passes.
-- [ ] Hang recovery passes.
-- [ ] Checkpoint corruption recovery passes.
+- [ ] OOM recovery passes — deterministic child policy is CPU-tested; real CUDA acceptance remains.
+- [ ] Hang recovery passes — process kill and stale-heartbeat policy are CPU-tested; real campaign/GPU acceptance remains.
+- [ ] Checkpoint corruption recovery passes — deterministic earlier-checkpoint policy is CPU-tested; full fault-injection dress rehearsal remains.
 - [x] Controller restart recovery passes — compressed Phase 11 simulation closes/reopens SQLite and resumes from the exact frozen manifest/deadline.
 - [ ] Storage outage/slowdown handling passes.
-- [ ] Circuit breaker passes.
+- [ ] Circuit breaker passes — CPU state-machine/health-gate logic is green; real GPU smoke/fault injection remains.
 - [ ] Discord alerts work and cannot block training.
-- [ ] AI repair sandbox cannot modify protected files/contracts.
+- [x] AI repair sandbox cannot modify protected files/contracts — default-deny CPU acceptance test is green; external provider/GPU requeue acceptance remains.
 - [ ] GMI Cold Storage sync/restore verified.
 - [ ] Final adaptive drain produces a durable report and zero critical sync backlog.
 - [ ] One-command H200 bootstrap/smoke/campaign flow works.
