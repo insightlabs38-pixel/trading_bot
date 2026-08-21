@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 from trading_bot.campaign.search_space import (
     CampaignSearchManifest,
+    CampaignStage,
     campaign_manifest_canonical_json,
     campaign_manifest_sha256,
 )
@@ -65,7 +66,9 @@ class CampaignController:
                 drain_reserve_seconds=float(self.policy.initial_drain_reserve_minutes * 60),
             )
             return
-        if str(row["manifest_sha256"]) != manifest_hash or str(row["manifest_json"]) != manifest_json:
+        stored_manifest_hash = str(row["manifest_sha256"])
+        stored_manifest_json = str(row["manifest_json"])
+        if stored_manifest_hash != manifest_hash or stored_manifest_json != manifest_json:
             raise RuntimeError("existing campaign DB does not match the frozen Phase 10 manifest")
         if float(row["deadline_at"]) != deadline_at:
             raise RuntimeError("campaign restart cannot silently change the fixed deadline")
@@ -193,7 +196,7 @@ class CampaignController:
         leaderboard: Sequence[LeaderboardRow],
         *,
         count: int,
-        to_stage: str,
+        to_stage: CampaignStage,
         to_budget_fraction: float,
     ) -> tuple[TrialSpec, ...]:
         selected_rows = select_promotions(leaderboard, count=count)
@@ -203,7 +206,8 @@ class CampaignController:
             state = self.db.trial_state(row.trial_id)
             if state != TrialState.EVALUATING:
                 raise RuntimeError(
-                    f"promotion candidate {row.trial_id!r} must be in EVALUATING, got {state.value}"
+                    f"promotion candidate {row.trial_id!r} must be in "
+                    f"EVALUATING, got {state.value}"
                 )
             parent = self.db.trial_spec(row.trial_id)
             promoted = selected.get(row.trial_id)

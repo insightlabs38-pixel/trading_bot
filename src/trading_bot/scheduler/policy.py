@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from pathlib import Path
 from typing import Literal
 
@@ -27,7 +28,7 @@ class DeadlineThresholds(FrozenConfigModel):
             self.finalists_only_min_usable_hours,
             self.avoid_expensive_min_usable_hours,
         )
-        if any(left <= right for left, right in zip(values, values[1:], strict=True)):
+        if any(left <= right for left, right in pairwise(values)):
             raise ValueError("deadline thresholds must be strictly descending")
         return self
 
@@ -72,7 +73,9 @@ def load_scheduler_runtime_policy(path: str | Path) -> SchedulerRuntimePolicy:
     try:
         raw = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
     except OSError as exc:
-        raise SchedulerPolicyError(f"unable to read scheduler policy {policy_path}: {exc}") from exc
+        raise SchedulerPolicyError(
+            f"unable to read scheduler policy {policy_path}: {exc}"
+        ) from exc
     except yaml.YAMLError as exc:
         raise SchedulerPolicyError(f"invalid scheduler YAML in {policy_path}: {exc}") from exc
     if not isinstance(raw, dict):

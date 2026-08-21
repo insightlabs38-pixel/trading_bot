@@ -54,7 +54,10 @@ def _controller(tmp_path: Path) -> tuple[CampaignDB, CampaignController]:
     manifest = _manifest()
     db = CampaignDB(tmp_path / "campaign.sqlite")
     controller = CampaignController(db, manifest, _policy())
-    controller.bootstrap(started_at=2_000_000_000.0, deadline_at=2_000_000_000.0 + 48 * 3600)
+    controller.bootstrap(
+        started_at=2_000_000_000.0,
+        deadline_at=2_000_000_000.0 + 48 * 3600,
+    )
     return db, controller
 
 
@@ -146,7 +149,7 @@ def test_sqlite_state_tables_transitions_and_immutable_trial(tmp_path: Path) -> 
     }
     assert {
         row[0]
-        for row in db._connection.execute(  # noqa: SLF001 - acceptance checks physical schema
+        for row in db._connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
         if not str(row[0]).startswith("sqlite_")
@@ -282,7 +285,12 @@ def test_deadline_policy_refuses_optional_then_all_new_work(tmp_path: Path) -> N
 
 
 def test_promotion_consumes_canonical_leaderboard_and_respects_grace() -> None:
-    rows = (_row("a", 1), _row("b", 2, eligible=False), _row("c", 3), _row("d", 4))
+    rows = (
+        _row("a", 1),
+        _row("b", 2, eligible=False),
+        _row("c", 3),
+        _row("d", 4),
+    )
     promoted = select_promotions(rows, count=2)
     assert [row.trial_id for row in promoted] == ["a", "c"]
     assert not can_performance_prune(

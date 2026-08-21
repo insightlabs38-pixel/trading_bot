@@ -280,9 +280,16 @@ class CampaignDB:
                 ),
             )
         except sqlite3.IntegrityError as exc:
-            raise CampaignDatabaseError(f"unable to insert immutable trial {spec.trial_id!r}") from exc
+            raise CampaignDatabaseError(
+                f"unable to insert immutable trial {spec.trial_id!r}"
+            ) from exc
         self._connection.commit()
-        self.record_event(campaign_id, "trial_registered", {"trial_id": spec.trial_id}, spec.trial_id)
+        self.record_event(
+            campaign_id,
+            "trial_registered",
+            {"trial_id": spec.trial_id},
+            spec.trial_id,
+        )
 
     def trial_row(self, trial_id: str) -> sqlite3.Row:
         row = self._connection.execute(
@@ -297,20 +304,24 @@ class CampaignDB:
 
     def trial_spec(self, trial_id: str) -> TrialSpec:
         row = self.trial_row(trial_id)
-        return TrialSpec(
-            trial_id=str(row["trial_id"]),
-            family=str(row["family"]),
-            scale=str(row["scale"]),
-            stage=str(row["stage"]),
-            budget_fraction=float(row["budget_fraction"]),
-            priority=str(row["priority"]),
-            config=json.loads(str(row["config_json"])),
-            parent_trial_id=(
-                str(row["parent_trial_id"]) if row["parent_trial_id"] is not None else None
-            ),
-            root_trial_id=str(row["root_trial_id"]),
-            attempt=int(row["attempt"]),
-            fallback_runtime_seconds=float(row["fallback_runtime_seconds"]),
+        return TrialSpec.model_validate(
+            {
+                "trial_id": str(row["trial_id"]),
+                "family": str(row["family"]),
+                "scale": str(row["scale"]),
+                "stage": str(row["stage"]),
+                "budget_fraction": float(row["budget_fraction"]),
+                "priority": str(row["priority"]),
+                "config": json.loads(str(row["config_json"])),
+                "parent_trial_id": (
+                    str(row["parent_trial_id"])
+                    if row["parent_trial_id"] is not None
+                    else None
+                ),
+                "root_trial_id": str(row["root_trial_id"]),
+                "attempt": int(row["attempt"]),
+                "fallback_runtime_seconds": float(row["fallback_runtime_seconds"]),
+            }
         )
 
     def transition_trial(self, trial_id: str, target: TrialState) -> None:
@@ -351,9 +362,19 @@ class CampaignDB:
         )
         self._connection.commit()
 
-    def record_metric(self, trial_id: str, name: str, value: float, *, step: int | None = None) -> None:
+    def record_metric(
+        self,
+        trial_id: str,
+        name: str,
+        value: float,
+        *,
+        step: int | None = None,
+    ) -> None:
         self._connection.execute(
-            "INSERT INTO metrics(trial_id, name, value, step, recorded_at) VALUES (?, ?, ?, ?, ?)",
+            """
+            INSERT INTO metrics(trial_id, name, value, step, recorded_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
             (trial_id, name, value, step, time.time()),
         )
         self._connection.commit()
@@ -429,7 +450,9 @@ class CampaignDB:
                     else None
                 ),
                 peak_vram_bytes=(
-                    int(row["peak_vram_bytes"]) if row["peak_vram_bytes"] is not None else None
+                    int(row["peak_vram_bytes"])
+                    if row["peak_vram_bytes"] is not None
+                    else None
                 ),
             )
             for row in rows
@@ -533,13 +556,17 @@ class CampaignDB:
         }
         if table not in allowed:
             raise ValueError(f"unsupported scheduler table {table!r}")
-        return tuple(self._connection.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall())
+        return tuple(
+            self._connection.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
+        )
 
     def snapshot_to_storage(
         self, backend: StorageBackend, key: str
     ) -> StorageObjectMetadata:
         """Create a transactionally consistent SQLite backup and checksum-verified upload."""
-        with tempfile.TemporaryDirectory(prefix="trading-bot-campaign-snapshot-") as directory:
+        with tempfile.TemporaryDirectory(
+            prefix="trading-bot-campaign-snapshot-"
+        ) as directory:
             snapshot_path = Path(directory) / "campaign.sqlite"
             destination = sqlite3.connect(snapshot_path)
             try:
@@ -550,5 +577,7 @@ class CampaignDB:
             checksum = sha256_file(snapshot_path)
             metadata = backend.upload(snapshot_path, key, expected_sha256=checksum)
             if not backend.verify_checksum(key, checksum):
-                raise CampaignDatabaseError("durable campaign snapshot checksum verification failed")
+                raise CampaignDatabaseError(
+                    "durable campaign snapshot checksum verification failed"
+                )
             return metadata

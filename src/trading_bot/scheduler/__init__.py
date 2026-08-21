@@ -1,7 +1,7 @@
 """CPU-safe H200 campaign scheduler primitives and compressed simulation."""
 
 from trading_bot.scheduler.controller import CampaignController
-from trading_bot.scheduler.db import CampaignDB, CampaignDatabaseError
+from trading_bot.scheduler.db import CampaignDatabaseError, CampaignDB
 from trading_bot.scheduler.planner import build_screening_trial_specs
 from trading_bot.scheduler.policy import (
     DeadlineThresholds,
@@ -22,7 +22,10 @@ from trading_bot.scheduler.runtime import (
     launch_decision,
     usable_seconds,
 )
-from trading_bot.scheduler.simulation import SimulationSummary, run_compressed_campaign_simulation
+from trading_bot.scheduler.simulation import (
+    SimulationSummary,
+    run_compressed_campaign_simulation,
+)
 from trading_bot.scheduler.types import (
     CampaignState,
     DrainInputs,

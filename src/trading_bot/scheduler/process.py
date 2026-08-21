@@ -6,9 +6,10 @@ import os
 import re
 import signal
 import subprocess
+from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence
 
 _TRIAL_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
@@ -79,8 +80,6 @@ class SubprocessTrialRunner:
         try:
             return int(process.wait(timeout=grace_seconds))
         except subprocess.TimeoutExpired:
-            try:
+            with suppress(ProcessLookupError):
                 os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
             return int(process.wait())

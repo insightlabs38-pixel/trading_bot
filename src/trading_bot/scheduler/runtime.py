@@ -7,10 +7,10 @@ from enum import StrEnum
 
 from pydantic import Field
 
+from trading_bot.config.base import FrozenConfigModel
 from trading_bot.scheduler.db import CampaignDB
 from trading_bot.scheduler.policy import SchedulerRuntimePolicy
 from trading_bot.scheduler.types import DrainInputs, LaunchPriority, TrialSpec
-from trading_bot.config.base import FrozenConfigModel
 
 
 class DeadlineMode(StrEnum):
