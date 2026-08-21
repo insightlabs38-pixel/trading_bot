@@ -237,9 +237,7 @@ def decide_recovery(
                 actions=(RecoveryAction.KILL_AND_RETRY,),
                 reason="kill process group and retry in a fresh worker",
                 resume_checkpoint_key=valid_checkpoint_key,
-                requires_gpu_health_gate=(
-                    failure_class == FailureClass.ILLEGAL_MEMORY_ACCESS
-                ),
+                requires_gpu_health_gate=(failure_class == FailureClass.ILLEGAL_MEMORY_ACCESS),
             ),
             None,
         )
