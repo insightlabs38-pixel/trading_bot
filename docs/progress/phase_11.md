@@ -130,6 +130,8 @@ Results:
 - pytest: **353 passed, 1 skipped in 18.58s**;
 - the sole skip is the existing opt-in Phase 2 real-S3 provider gate requiring external endpoint credentials.
 
+An interim read-only reconciliation run also passed at head `cad5139cd7e5d9c2fe5fa7e83517d78461c09dd7`: run `32441137410` / job `96651906364`, with Ruff clean, **129 files already formatted**, strict mypy clean across 70 source files, `compileall` clean, and **353 passed / 1 skipped in 18.11s**. This interim head still contained the unused branch-only reconciliation helper, which is removed before the final acceptance head.
+
 ## Gate
 
 **PASSED — CPU/SIMULATION CAMPAIGN SCHEDULER GATE.** The controller completes the compressed campaign with durable state, correct immutable lineage/promotions, bounded retry behavior, restart continuity, conservative deadline adaptation, finalist-only mode, adaptive drain, and verified durable final state. Phase 12 can now layer deterministic failure classification/recovery and AI-repair isolation onto this scheduler without changing frozen research-selection semantics.
