@@ -1,0 +1,175 @@
+name: Phase 11 tracker reconciliation
+
+on:
+  push:
+    branches:
+      - phase11-campaign-scheduler
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out feature branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
+            fetch --no-tags origin refs/heads/phase11-campaign-scheduler
+          git checkout -B phase11-campaign-scheduler FETCH_HEAD
+
+      - name: Reconcile authoritative tracker
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("IMPLEMENTATION_PLAN.md")
+          text = path.read_text(encoding="utf-8")
+
+          old_reconciliation = """The Phase 0–10 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; Phase 7 is complete on the CPU/reference baseline gate; the Phase 8 CPU/reference core-architecture gate has passed while selected pretrained-foundation and GPU/H200 acceptance remain open; the Phase 9 CPU/reference custom-architecture/correctness gate has passed while Triton and target-GPU optimization acceptance remain open; and Phase 10 is complete on the version-controlled campaign search-manifest gate. Remaining open items require external provider/data choices, frozen production methodology/dates, finalized production-data validation, selected external model artifacts, GPU/H200/Triton acceptance, or later scheduler/runtime integration."""
+          new_reconciliation = """The Phase 0–11 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; Phase 7 is complete on the CPU/reference baseline gate; the Phase 8 CPU/reference core-architecture gate has passed while selected pretrained-foundation and GPU/H200 acceptance remain open; the Phase 9 CPU/reference custom-architecture/correctness gate has passed while Triton and target-GPU optimization acceptance remain open; Phase 10 is complete on the version-controlled campaign search-manifest gate; and Phase 11 is complete on the CPU/simulation deadline-aware scheduler gate. Real H200 utilization/VRAM/throughput values remain target-hardware observations for the production campaign, while deterministic failure classification, recovery/circuit-breaker policy, and AI repair remain Phase 12. Remaining open items require external provider/data choices, frozen production methodology/dates, finalized production-data validation, selected external model artifacts, GPU/H200/Triton acceptance, or later fault-tolerance/operations integration."""
+          assert text.count(old_reconciliation) == 1
+          text = text.replace(old_reconciliation, new_reconciliation)
+
+          old_master = "| 11. H200 campaign scheduler | Not started | Yes |"
+          new_master = "| 11. H200 campaign scheduler | **COMPLETE — CPU/simulation scheduler gate passed** | Yes |"
+          assert text.count(old_master) == 1
+          text = text.replace(old_master, new_master)
+
+          phase_start = text.index("# 13. Phase 11 — H200 campaign scheduler")
+          phase_end = text.index("# 14. Phase 12 — deterministic fault tolerance and AI repair")
+          phase11 = """# 13. Phase 11 — H200 campaign scheduler
+
+## Goal
+
+Build a deadline-aware campaign controller that remains alive when trials fail.
+
+## Persistent state
+
+- [x] SQLite campaign DB — schema-versioned, WAL-backed, `synchronous=FULL` local authority.
+- [x] Campaign metadata table — stores exact Phase 10 manifest hash/JSON, state, fixed deadline, and drain reserve.
+- [x] Trials table — immutable canonical config JSON/SHA-256 plus parent/root lineage and state.
+- [x] Metrics table.
+- [x] Checkpoints table.
+- [x] Runtime statistics table.
+- [x] Events table.
+- [x] Failures table — generic scheduler failure lineage; detailed deterministic classes remain Phase 12.
+- [x] Promotion lineage.
+- [x] State snapshot to durable storage — SQLite backup → SHA-256 → `StorageBackend` upload → checksum verification.
+
+## Campaign state machine
+
+- [x] BOOTSTRAP.
+- [x] CALIBRATION.
+- [x] SCREENING.
+- [x] PROMOTION.
+- [x] OBJECTIVE_SEARCH.
+- [x] FINALISTS.
+- [x] DRAIN.
+- [x] COMPLETE.
+
+## Trial state machine
+
+- [x] PENDING.
+- [x] STARTING.
+- [x] RUNNING.
+- [x] EVALUATING.
+- [x] SYNCING.
+- [x] COMPLETE.
+- [x] PRUNED.
+- [x] RETRYABLE_FAILURE.
+- [x] TERMINAL_FAILURE.
+- [x] INTERRUPTED.
+
+## Process isolation
+
+- [x] Scheduler never imports/runs CUDA training in-process — fresh-process CI asserts importing `trading_bot.scheduler` does not import `torch`.
+- [x] Each trial is a separate subprocess/process group through `SubprocessTrialRunner`.
+- [x] Capture stdout/stderr per trial.
+- [x] TERM → grace → KILL behavior — Linux CI covers a SIGTERM-ignoring process group and SIGKILL escalation.
+- [x] Fresh Python process after serious CUDA errors — every launch/retry is a new subprocess; CUDA-error classification that decides the recovery action remains Phase 12.
+
+## Deadline adaptation
+
+- [x] Fixed campaign deadline — restart rejects silent deadline changes.
+- [x] Dynamic drain reserve — evaluator backlog + durable-sync estimate + safety margin, bounded below by the frozen initial reserve.
+- [x] Runtime estimator from observed trials — family/scale/context observations normalize partial-rung runtimes to full-budget equivalents.
+- [x] Conservative p90-like launch estimate — nearest-rank configured `0.90` quantile plus safety multiplier.
+- [x] Never start work that cannot plausibly complete before drain.
+- [x] Stop low-priority exploration as deadline approaches.
+- [x] Finalist-only mode.
+- [x] Drain mode.
+
+## Successive halving
+
+- [x] Screening rung — the Phase 10 manifest deterministically materializes all 66 frozen screening trials.
+- [x] Promotion rung.
+- [x] Full/finalist rung.
+- [x] Grace budget before pruning — pruning helper enforces the configured fraction of the current rung budget.
+- [x] Promotion based on frozen evaluation hierarchy — consumes Phase 6 `LeaderboardRow.eligible` and `rank` without creating a scheduler score.
+
+## Runtime/resource scheduling
+
+- [x] GPU utilization reporting — typed/persisted worker telemetry fields are implemented; CPU CI uses synthetic values and makes no real H200 measurement claim.
+- [x] Peak VRAM reporting — typed/persisted worker telemetry fields are implemented; real H200 values remain Phase 17 observations.
+- [x] Support exclusive GPU trials — frozen v1 policy owns one GPU slot by default.
+- [x] Optional limited concurrent tiny trials only if calibration proves beneficial — support exists but cannot open until an explicitly enabled policy receives calibration throughput gain above its threshold; v1 remains exclusive.
+- [x] CPU evaluator runs concurrently where safe — independent CPU evaluator slots do not consume the GPU-trial slot.
+
+### Progress note — 2026-08-20
+
+- `configs/campaigns/h200_scheduler_v1.yaml` freezes the operational scheduler policy separately from the Phase 10 experiment/search manifest: 90-minute initial drain reserve, p90-like runtime estimate, deadline tiers at 24/12/6/3/1.5 usable hours, 50% pruning grace, two same-config retries, and exclusive GPU ownership by default.
+- `CampaignDB` persists campaign/trial/metric/checkpoint/runtime/event/failure/promotion/resource state and produces transactionally consistent checksum-verified durable SQLite snapshots.
+- Restart validates the exact canonical Phase 10 manifest identity and fixed campaign deadline; immutable retry/promotion children preserve parent/root lineage instead of mutating scientific trial identity.
+- The scheduler package remains model/CUDA-free; workers use fresh process groups with separate logs and TERM→grace→KILL handling.
+- Runtime estimates use observed partial-budget durations; adaptive drain fails closed when critical unsynced bytes exist without a known storage-throughput estimate.
+- Promotion reuses the canonical Phase 6 leaderboard eligibility/rank hierarchy. No opaque scheduler score was introduced.
+- The compressed CPU simulation exercises calibration, all 66 screening registrations, one retry child, controller/SQLite restart, promotion/objective/finalist lineage, finalist-only late scheduling, adaptive drain, pending-work interruption, zero-critical-backlog completion, and durable snapshot restore verification.
+- Implementation-only read-only Python 3.12 CI run `32440888978` / job `96651209298` tested head `435f075257104cfdce29be2155c0b0690b562f20` via synthetic merge `1f964bed6edcca988504ab5b89e059bb40cb3df7`; Ruff/format passed across 128 files, strict mypy passed across 70 source files, compileall passed, and pytest reported 353 passed / 1 skipped.
+- The only skip remains the unrelated opt-in Phase 2 real-S3 provider gate. Detailed Phase 11 evidence is recorded in `docs/progress/phase_11.md`.
+- No real H200 utilization, peak-VRAM, or throughput measurement is claimed by the CPU/simulation gate. Deterministic CUDA/storage/evaluator failure classification, recovery policies, circuit breaker, golden canary, and AI repair remain Phase 12.
+
+## Gate
+
+In simulation mode, the controller finishes a compressed campaign with correct lineage, promotions, retries, deadline adaptation, and drain behavior.
+
+**PASSED — CPU/SIMULATION CAMPAIGN SCHEDULER GATE.** The model-free controller completes the compressed campaign with durable SQLite state, immutable retry/promotion lineage, restart continuity, frozen Phase 6 promotion ordering, conservative launch guards, finalist-only mode, adaptive drain, zero critical sync backlog, and checksum-verified final state. Phase 12 may proceed without claiming target-H200 performance from this CPU gate.
+
+---
+
+"""
+          text = text[:phase_start] + phase11 + text[phase_end:]
+
+          replacements = {
+              "- [ ] Campaign configs immutable once campaign starts — Phase 10 freezes/identifies the manifest; runtime enforcement belongs to Phase 11.": "- [x] Campaign configs immutable once campaign starts — Phase 11 restart validates the exact frozen Phase 10 manifest hash/JSON and refuses silent deadline changes.",
+              "- [ ] Trial configs immutable — enforcement belongs to Phase 5/11.": "- [x] Trial configs immutable — Phase 11 stores canonical config JSON/SHA-256 and creates new child rows for retries/promotions instead of mutating trial identity.",
+              "16. [ ] Campaign scheduler/state DB/fault handling.": "16. [x] Campaign scheduler/state DB/deadline/successive-halving simulation — deterministic fault classification/recovery remains Phase 12.",
+              "External production/hardware/model-artifact blockers should be closed as credentials, frozen production data/methodology, selected pretrained checkpoints, and GPU/Triton infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, baseline-model, advanced-core, custom-reference, and campaign-manifest gates.": "External production/hardware/model-artifact blockers should be closed as credentials, frozen production data/methodology, selected pretrained checkpoints, and GPU/Triton infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, baseline-model, advanced-core, custom-reference, campaign-manifest, and scheduler-simulation gates.",
+              "- [ ] Scheduler simulation passes.": "- [x] Scheduler simulation passes — compressed Phase 11 restart/retry/promotion/deadline/drain gate is green in CPU CI.",
+              "- [ ] Controller restart recovery passes.": "- [x] Controller restart recovery passes — compressed Phase 11 simulation closes/reopens SQLite and resumes from the exact frozen manifest/deadline.",
+          }
+          for old, new in replacements.items():
+              assert text.count(old) == 1, old
+              text = text.replace(old, new)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit reconciliation and remove temporary workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm .github/workflows/phase11-tracker-reconcile.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add IMPLEMENTATION_PLAN.md .github/workflows/phase11-tracker-reconcile.yml
+          git commit -m "Reconcile Phase 11 scheduler tracker"
+          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic $auth_header" \
+            push origin HEAD:refs/heads/phase11-campaign-scheduler
