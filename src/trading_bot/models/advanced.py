@@ -458,9 +458,7 @@ class TemporalCrossSectionalTransformerReturnModel(TradingModel):
         self.input_features = input_features
         self.max_sequence_length = max_sequence_length
         self.input_projection = nn.Linear(input_features, model_features)
-        self.position_embedding = nn.Parameter(
-            torch.zeros(1, max_sequence_length, model_features)
-        )
+        self.position_embedding = nn.Parameter(torch.zeros(1, max_sequence_length, model_features))
         nn.init.normal_(self.position_embedding, mean=0.0, std=0.02)
         temporal_layer = nn.TransformerEncoderLayer(
             d_model=model_features,
@@ -649,12 +647,8 @@ def profile_advanced_model(model: nn.Module) -> AdvancedModelProfile:
     parameters = tuple(model.parameters())
     buffers = tuple(model.buffers())
     parameter_count = sum(parameter.numel() for parameter in parameters)
-    trainable_count = sum(
-        parameter.numel() for parameter in parameters if parameter.requires_grad
-    )
-    parameter_bytes = sum(
-        parameter.numel() * parameter.element_size() for parameter in parameters
-    )
+    trainable_count = sum(parameter.numel() for parameter in parameters if parameter.requires_grad)
+    parameter_bytes = sum(parameter.numel() * parameter.element_size() for parameter in parameters)
     buffer_bytes = sum(buffer.numel() * buffer.element_size() for buffer in buffers)
     return AdvancedModelProfile(
         parameter_count=parameter_count,

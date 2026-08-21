@@ -89,19 +89,13 @@ def _make_split() -> BaselineSplit:
     base_timestamp = 1_767_225_600_000_000_000
     for batch_index in range(10):
         feature_0 = assets[:, None] + batch_index * 0.025 + sequence_index[None, :] * 0.008
-        feature_1 = (
-            -0.40 * assets[:, None]
-            + batch_index * 0.015
-            - sequence_index[None, :] * 0.004
-        )
+        feature_1 = -0.40 * assets[:, None] + batch_index * 0.015 - sequence_index[None, :] * 0.004
         feature_2 = torch.sin(
             assets[:, None] * 1.4 + sequence_index[None, :] * 0.18 + batch_index * 0.09
         )
         features = torch.stack((feature_0, feature_1, feature_2), dim=-1)
         future_return = (
-            0.018 * feature_0[:, -1]
-            - 0.013 * feature_1[:, -1]
-            + 0.005 * feature_2.mean(dim=1)
+            0.018 * feature_0[:, -1] - 0.013 * feature_1[:, -1] + 0.005 * feature_2.mean(dim=1)
         )
         timestamp = base_timestamp + batch_index * 86_400_000_000_000
         batches.append(
@@ -309,9 +303,7 @@ def phase8_gate(tmp_path_factory: pytest.TempPathFactory) -> Phase8GateResult:
 def test_all_cpu_reference_advanced_families_complete_common_gate(
     phase8_gate: Phase8GateResult,
 ) -> None:
-    assert {result.trial_id for result in phase8_gate.families} == set(
-        CORE_ADVANCED_ARCHITECTURES
-    )
+    assert {result.trial_id for result in phase8_gate.families} == set(CORE_ADVANCED_ARCHITECTURES)
     assert all(result.parameter_count > 0 for result in phase8_gate.families)
     assert all(result.state_bytes > 0 for result in phase8_gate.families)
     assert all(result.samples_per_second > 0 for result in phase8_gate.families)
