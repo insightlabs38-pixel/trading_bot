@@ -1,0 +1,24 @@
+schema_version: 1
+policy_id: h200-scheduler-v1
+initial_drain_reserve_minutes: 90
+drain_safety_margin_minutes: 20
+runtime_quantile: 0.90
+runtime_safety_multiplier: 1.15
+pruning_grace_fraction: 0.50
+max_trial_retries: 2
+worker_kill_grace_seconds: 45.0
+snapshot_interval_minutes: 5
+
+deadline_thresholds:
+  broad_exploration_min_usable_hours: 24.0
+  normal_promotion_min_usable_hours: 12.0
+  restricted_expansion_min_usable_hours: 6.0
+  finalists_only_min_usable_hours: 3.0
+  avoid_expensive_min_usable_hours: 1.5
+
+resources:
+  exclusive_gpu_trials: true
+  max_gpu_trials: 1
+  max_cpu_evaluators: 2
+  allow_concurrent_tiny_trials_after_calibration: false
+  minimum_tiny_trial_throughput_gain: 1.10
