@@ -35,6 +35,9 @@ class TrialState(StrEnum):
     RETRYABLE_FAILURE = "RETRYABLE_FAILURE"
     TERMINAL_FAILURE = "TERMINAL_FAILURE"
     INTERRUPTED = "INTERRUPTED"
+    QUARANTINED = "QUARANTINED"
+    AI_REPAIR_PENDING = "AI_REPAIR_PENDING"
+    AI_REPAIR_EXHAUSTED = "AI_REPAIR_EXHAUSTED"
 
 
 class LaunchPriority(StrEnum):
@@ -91,9 +94,18 @@ _TRIAL_TRANSITIONS: dict[TrialState, frozenset[TrialState]] = {
     ),
     TrialState.COMPLETE: frozenset(),
     TrialState.PRUNED: frozenset(),
-    TrialState.RETRYABLE_FAILURE: frozenset(),
-    TrialState.TERMINAL_FAILURE: frozenset(),
-    TrialState.INTERRUPTED: frozenset(),
+    TrialState.RETRYABLE_FAILURE: frozenset(
+        {TrialState.QUARANTINED, TrialState.AI_REPAIR_PENDING}
+    ),
+    TrialState.TERMINAL_FAILURE: frozenset(
+        {TrialState.QUARANTINED, TrialState.AI_REPAIR_PENDING}
+    ),
+    TrialState.INTERRUPTED: frozenset({TrialState.QUARANTINED}),
+    TrialState.QUARANTINED: frozenset({TrialState.AI_REPAIR_PENDING}),
+    TrialState.AI_REPAIR_PENDING: frozenset(
+        {TrialState.QUARANTINED, TrialState.AI_REPAIR_EXHAUSTED}
+    ),
+    TrialState.AI_REPAIR_EXHAUSTED: frozenset(),
 }
 
 
