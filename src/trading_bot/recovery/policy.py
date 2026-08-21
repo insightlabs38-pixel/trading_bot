@@ -49,7 +49,8 @@ class RecoveryPolicy(FrozenConfigModel):
     def validate_policy(self) -> RecoveryPolicy:
         missing = set(WorkerPhase) - set(self.heartbeat_timeouts_seconds)
         if missing:
-            raise ValueError(f"heartbeat timeouts missing phases: {sorted(item.value for item in missing)}")
+            missing_names = sorted(item.value for item in missing)
+            raise ValueError(f"heartbeat timeouts missing phases: {missing_names}")
         if self.circuit_failure_threshold < 2:
             raise ValueError("circuit breaker threshold must be at least two failures")
         return self
@@ -95,7 +96,9 @@ def derive_oom_child(parent: TrialSpec, policy: RecoveryPolicy) -> TrialSpec | N
     child_config["batch"] = {
         "microbatch_size": reduced,
         "gradient_accumulation_steps": accumulation,
-        "effective_batch_size": effective if policy.preserve_effective_batch else reduced * accumulation,
+        "effective_batch_size": (
+            effective if policy.preserve_effective_batch else reduced * accumulation
+        ),
     }
     return TrialSpec(
         trial_id=f"{parent.trial_id}-oom-r{parent.attempt + 1}",
@@ -234,7 +237,9 @@ def decide_recovery(
                 actions=(RecoveryAction.KILL_AND_RETRY,),
                 reason="kill process group and retry in a fresh worker",
                 resume_checkpoint_key=valid_checkpoint_key,
-                requires_gpu_health_gate=failure_class == FailureClass.ILLEGAL_MEMORY_ACCESS,
+                requires_gpu_health_gate=(
+                    failure_class == FailureClass.ILLEGAL_MEMORY_ACCESS
+                ),
             ),
             None,
         )
