@@ -14,7 +14,7 @@ This document is the detailed execution plan for `trading_bot`. It is intended t
 
 ### Reconciliation note — 2026-08-20
 
-The Phase 0–7 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; and the Phase 7 CPU/reference baseline-model gate is complete. Remaining open items across Phases 2–6 require external provider/data choices, frozen production methodology/dates, finalized production-data validation, or GPU/H200 acceptance.
+The Phase 0–8 tracker is reconciled below against supported-runtime CI evidence. Phase 1 is complete; Phase 2 is blocked only on real S3/provider validation; the provider-independent Phase 3/4 CPU implementation is substantially complete; the Phase 5 CPU training-framework gate has passed while GPU acceptance remains open; the Phase 6 CPU/reference evaluator gate has passed while real factor/BBO dataset validation remains external; Phase 7 is complete on the CPU/reference baseline gate; and the Phase 8 CPU/reference core-architecture gate has passed while selected pretrained-foundation and GPU/H200 acceptance remain open. Remaining open items require external provider/data choices, frozen production methodology/dates, finalized production-data validation, selected external model artifacts, or GPU/H200 acceptance.
 
 CPU-only GitHub Actions verification now runs on one standard `ubuntu-latest` hosted runner using Python 3.12 and the committed `uv.lock`. The permanent read-only gate runs Ruff, Ruff format checking, strict mypy, `compileall`, and the full pytest suite. GPU/Triton/H200 checks remain intentionally excluded until compatible GPU infrastructure is available.
 
@@ -99,7 +99,7 @@ Do not optimize Triton kernels, build live broker integration, or add elaborate 
 | 5. Common training framework | **IN PROGRESS — CPU gate passed; GPU acceptance pending** | Yes |
 | 6. Evaluation/backtesting framework | **IN PROGRESS — CPU gate passed; real factor/BBO data acceptance pending** | Yes |
 | 7. Baseline model families | **COMPLETE — CPU/reference baseline gate passed** | Yes |
-| 8. Advanced model families | Not started | Yes |
+| 8. Advanced model families | **IN PROGRESS — CPU/reference core gate passed; foundation/GPU acceptance pending** | Yes |
 | 9. Custom architectures + Triton | Not started | Yes |
 | 10. Experiment configuration/search spaces | Not started | Yes |
 | 11. H200 campaign scheduler | Not started | Yes |
@@ -742,26 +742,39 @@ Baseline leaderboard is produced successfully on the rehearsal dataset before ad
 
 Implement the selected core tournament families:
 
-- [ ] PatchTST.
-- [ ] iTransformer.
-- [ ] Mamba/Mamba-2 family.
-- [ ] xLSTM and/or VSN recurrent variants if retained in final experiment matrix.
-- [ ] Temporal + cross-sectional Transformer.
-- [ ] Temporal + graph model.
-- [ ] Selected pretrained time-series foundation-model adapters/reference evaluations.
+- [x] PatchTST — dependency-light channel-independent patch Transformer CPU reference.
+- [x] iTransformer — variable-token Transformer CPU reference.
+- [x] Mamba/Mamba-2 family — pure-PyTorch selective state-space correctness/screening reference; fused Mamba-2 kernel and H200 performance equivalence remain GPU-dependent.
+- [x] xLSTM and/or VSN recurrent variants if retained in final experiment matrix — VSN + LSTM recurrent reference implemented.
+- [x] Temporal + cross-sectional Transformer with explicit same-decision-timestamp batch guard.
+- [x] Temporal + graph model with same-timestamp learned similarity/top-k message passing.
+- [ ] Selected pretrained time-series foundation-model adapters/reference evaluations — typed checksum-identified frozen-backbone adapter is implemented and CPU-tested, but a real selected pretrained checkpoint has not yet been chosen/evaluated.
 
-For each:
+For each CPU-reference core family:
 
-- [ ] small configuration;
-- [ ] medium configuration;
-- [ ] larger scaling configuration where justified;
-- [ ] memory/throughput profiling;
-- [ ] representative shape tests;
-- [ ] consistent prediction heads.
+- [x] small configuration;
+- [x] medium configuration;
+- [x] larger scaling configuration where justified — deterministic reference specs/shape tests exist; paid-campaign sizing remains subject to GPU/H200 profiling;
+- [x] memory/throughput profiling — exact model-state bytes and CPU inference timing are covered; GPU peak-memory/H200 throughput remains external;
+- [x] representative shape tests across small/medium/large specs;
+- [x] consistent expected-return/rank/direction/volatility/uncertainty prediction heads.
+
+### Progress note — 2026-08-20
+
+- Six dependency-light PyTorch core families are implemented under `src/trading_bot/models/advanced.py` and exported through the common model package.
+- Every core family consumes the common Phase 5 `TrainingBatch`, emits `ModelOutput`, performs finite forward/backward, trains through `Trainer`, checkpoints at optimizer step 2, reconstructs/restores, and continues through optimizer step 4.
+- Every family publishes the common Parquet + Zstd prediction artifact and enters one canonical Phase 6 cost-aware evaluator/leaderboard/report rehearsal on the same deterministic split and portfolio rule.
+- Deterministic small/medium/large specs, exact parameter/model-state byte accounting, CPU inference timing, and representative scale-shape tests are implemented without adding new runtime dependencies.
+- Same-timestamp guards prevent cross-sectional/graph models from silently mixing different decision timestamps.
+- The foundation-model boundary is offline and fail-closed: it requires a caller-supplied checksum-identified backbone, freezes that backbone, and trains only the adapter/common heads. Real pretrained checkpoint selection/licensing/evaluation remains external.
+- Supported Python 3.12 read-only CI run `32433083576` / job `96628678153` passed lock freshness, Ruff, formatting across 108 files, strict mypy across 56 source files, compileall, and 279 tests with only the unrelated opt-in Phase 2 real-S3 provider gate skipped.
+- Detailed scope and remaining external acceptance are recorded in `docs/progress/phase_08.md`.
 
 ## Gate
 
 Every core architecture can complete a screening-budget run using the same trainer/evaluator and produces comparable artifacts.
+
+**CPU/REFERENCE CORE ARCHITECTURE GATE PASSED.** Six trainable core families complete the common screening rehearsal in Python 3.12 CPU CI and produce comparable durable artifacts through the canonical evaluator. Phase 8 remains **IN PROGRESS** only for a real selected pretrained foundation-model checkpoint/reference evaluation and representative GPU/H200 memory/throughput acceptance; no such external result is claimed by this CPU gate.
 
 ---
 
@@ -1540,7 +1553,7 @@ Current recommended sequence, reconciled to implemented work:
 10. [x] Common model/trainer/checkpoint/prediction interfaces.
 11. [x] Canonical evaluator and metric unit tests.
 12. [x] Simple baseline models and an end-to-end research smoke test.
-13. [ ] Advanced/core model families.
+13. [x] Advanced/core model families — CPU/reference core gate; external foundation/GPU acceptance remains.
 14. [ ] Custom Market Mixer/reference custom operators.
 15. [ ] Campaign scheduler/state DB/fault handling.
 16. [ ] Discord/telemetry/sync services.
@@ -1550,7 +1563,7 @@ Current recommended sequence, reconciled to implemented work:
 20. [ ] Full production data build/staging.
 21. [ ] H200 campaign.
 
-External Phase 2–6 production/hardware blockers should be closed as credentials, frozen production data/methodology, and GPU infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, and baseline-model gates.
+External production/hardware/model-artifact blockers should be closed as credentials, frozen production data/methodology, selected pretrained checkpoints, and GPU infrastructure become available; they do not invalidate the completed CPU/reference training, evaluation, baseline-model, and advanced-core gates.
 
 ---
 
