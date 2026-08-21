@@ -32,7 +32,16 @@ class RepairSandbox:
         if worktree.exists():
             raise FileExistsError(f"repair worktree already exists: {worktree}")
         subprocess.run(
-            ["git", "-C", str(repository), "worktree", "add", "--detach", str(worktree), base_ref],
+            [
+                "git",
+                "-C",
+                str(repository),
+                "worktree",
+                "add",
+                "--detach",
+                str(worktree),
+                base_ref,
+            ],
             check=True,
             capture_output=True,
             text=True,
@@ -69,7 +78,15 @@ class RepairSandbox:
 
     def close(self) -> None:
         subprocess.run(
-            ["git", "-C", str(self.repository_root), "worktree", "remove", "--force", str(self.worktree_path)],
+            [
+                "git",
+                "-C",
+                str(self.repository_root),
+                "worktree",
+                "remove",
+                "--force",
+                str(self.worktree_path),
+            ],
             check=False,
             capture_output=True,
             text=True,
