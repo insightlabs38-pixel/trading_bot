@@ -7,6 +7,7 @@ import json
 import os
 import re
 from collections.abc import Mapping
+from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 from typing import Protocol
 
@@ -86,7 +87,8 @@ class ProtectedFilePolicy(FrozenConfigModel):
         normalized = PurePosixPath(path.replace("\\", "/"))
         if normalized.is_absolute() or ".." in normalized.parts:
             return True
-        return any(normalized.match(pattern) for pattern in self.patterns)
+        normalized_text = normalized.as_posix()
+        return any(fnmatchcase(normalized_text, pattern) for pattern in self.patterns)
 
     def require_allowed(self, paths: tuple[str, ...]) -> None:
         blocked = sorted(path for path in paths if self.is_protected(path))
@@ -149,10 +151,10 @@ class RepairAuditLog:
 
 
 def redact_text(value: str) -> str:
-    redacted = _SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}={_REDACTED}", value)
+    redacted = _BEARER_RE.sub(f"Bearer {_REDACTED}", value)
+    redacted = _SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}={_REDACTED}", redacted)
     redacted = _AWS_KEY_RE.sub(_REDACTED, redacted)
-    redacted = _GITHUB_TOKEN_RE.sub(_REDACTED, redacted)
-    return _BEARER_RE.sub(f"Bearer {_REDACTED}", redacted)
+    return _GITHUB_TOKEN_RE.sub(_REDACTED, redacted)
 
 
 def _redact_json(value: JsonValue) -> JsonValue:
