@@ -108,19 +108,13 @@ def test_stale_heartbeat_has_priority() -> None:
 
 
 def test_disk_floor_evidence_is_deterministic() -> None:
-    result = classify_failure(
-        FailureEvidence(free_disk_bytes=5, expected_disk_floor_bytes=10)
-    )
+    result = classify_failure(FailureEvidence(free_disk_bytes=5, expected_disk_floor_bytes=10))
     assert result.failure_class == FailureClass.DISK_PRESSURE
 
 
 def test_evaluator_and_process_exit_classification() -> None:
-    evaluator = classify_failure(
-        FailureEvidence(worker_phase=WorkerPhase.EVALUATING, exit_code=2)
-    )
-    process = classify_failure(
-        FailureEvidence(worker_phase=WorkerPhase.TRAINING, exit_code=2)
-    )
+    evaluator = classify_failure(FailureEvidence(worker_phase=WorkerPhase.EVALUATING, exit_code=2))
+    process = classify_failure(FailureEvidence(worker_phase=WorkerPhase.TRAINING, exit_code=2))
     assert evaluator.failure_class == FailureClass.EVALUATOR_FAILURE
     assert process.failure_class == FailureClass.PROCESS_CRASH
 
@@ -188,16 +182,10 @@ def test_non_finite_recovery_requires_last_good_checkpoint() -> None:
 
 
 def test_evaluator_and_storage_retries_are_independent() -> None:
-    evaluator = classify_failure(
-        FailureEvidence(worker_phase=WorkerPhase.EVALUATING, exit_code=7)
-    )
+    evaluator = classify_failure(FailureEvidence(worker_phase=WorkerPhase.EVALUATING, exit_code=7))
     storage = classify_failure(FailureEvidence(stderr="storage upload timeout"))
-    evaluator_decision, _ = decide_recovery(
-        evaluator, _trial(), _policy(), evaluator_attempts=0
-    )
-    storage_decision, _ = decide_recovery(
-        storage, _trial(), _policy(), storage_attempts=0
-    )
+    evaluator_decision, _ = decide_recovery(evaluator, _trial(), _policy(), evaluator_attempts=0)
+    storage_decision, _ = decide_recovery(storage, _trial(), _policy(), storage_attempts=0)
     assert evaluator_decision.actions == (RecoveryAction.RETRY_EVALUATOR,)
     assert storage_decision.actions == (RecoveryAction.RETRY_STORAGE,)
 
@@ -457,13 +445,9 @@ def test_ai_repair_disabled_is_non_blocking() -> None:
 
 def test_repair_audit_log_and_child_lineage(tmp_path: Path) -> None:
     proposal = RepairProposal(summary="repair", diagnosis="fixture", changes=())
-    child = derive_repaired_child(
-        _trial(), proposal_sha256=proposal.canonical_sha256
-    )
+    child = derive_repaired_child(_trial(), proposal_sha256=proposal.canonical_sha256)
     assert child.parent_trial_id == "phase12-trial"
-    assert child.config["repair_provenance"] == {
-        "proposal_sha256": proposal.canonical_sha256
-    }
+    assert child.config["repair_provenance"] == {"proposal_sha256": proposal.canonical_sha256}
     audit = RepairAuditLog(tmp_path / "repair.jsonl")
     record = RepairAuditRecord(
         trial_id="phase12-trial",
@@ -483,9 +467,7 @@ def _init_git_repo(path: Path) -> None:
         ["git", "-C", str(path), "config", "user.email", "ci@example.invalid"],
         check=True,
     )
-    subprocess.run(
-        ["git", "-C", str(path), "config", "user.name", "CI"], check=True
-    )
+    subprocess.run(["git", "-C", str(path), "config", "user.name", "CI"], check=True)
     (path / "model.py").write_text("VALUE = 1\n", encoding="utf-8")
     (path / "PLAN.md").write_text("frozen\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(path), "add", "."], check=True)
@@ -496,9 +478,7 @@ def test_repair_sandbox_isolated_patch_and_cpu_gates(tmp_path: Path) -> None:
     repository = tmp_path / "repo"
     _init_git_repo(repository)
     worktree = tmp_path / "repair-worktree"
-    sandbox = RepairSandbox.create(
-        repository_root=repository, worktree_path=worktree
-    )
+    sandbox = RepairSandbox.create(repository_root=repository, worktree_path=worktree)
     try:
         current = (worktree / "model.py").read_bytes()
         proposal = _proposal_for("model.py", current, "VALUE = 2\n")
@@ -507,12 +487,8 @@ def test_repair_sandbox_isolated_patch_and_cpu_gates(tmp_path: Path) -> None:
         cpu_only = validate_repair(
             sandbox,
             static_commands=((sys.executable, "-m", "py_compile", "model.py"),),
-            unit_commands=(
-                (sys.executable, "-c", "import model; assert model.VALUE == 2"),
-            ),
-            regression_commands=(
-                (sys.executable, "-c", "import model; assert model.VALUE < 3"),
-            ),
+            unit_commands=((sys.executable, "-c", "import model; assert model.VALUE == 2"),),
+            regression_commands=((sys.executable, "-c", "import model; assert model.VALUE < 3"),),
             gpu_smoke_gate=unavailable_gpu_gate(),
         )
         assert cpu_only.static_gate.passed
@@ -520,18 +496,12 @@ def test_repair_sandbox_isolated_patch_and_cpu_gates(tmp_path: Path) -> None:
         assert cpu_only.regression_gate.passed
         assert cpu_only.eligible_for_requeue is False
 
-        synthetic_gpu = GateResult(
-            name="gpu_smoke", passed=True, detail="synthetic policy fixture"
-        )
+        synthetic_gpu = GateResult(name="gpu_smoke", passed=True, detail="synthetic policy fixture")
         complete = validate_repair(
             sandbox,
             static_commands=((sys.executable, "-m", "py_compile", "model.py"),),
-            unit_commands=(
-                (sys.executable, "-c", "import model; assert model.VALUE == 2"),
-            ),
-            regression_commands=(
-                (sys.executable, "-c", "import model; assert model.VALUE < 3"),
-            ),
+            unit_commands=((sys.executable, "-c", "import model; assert model.VALUE == 2"),),
+            regression_commands=((sys.executable, "-c", "import model; assert model.VALUE < 3"),),
             gpu_smoke_gate=synthetic_gpu,
         )
         assert complete.eligible_for_requeue
@@ -543,9 +513,7 @@ def test_repair_sandbox_rejects_protected_and_stale_targets(tmp_path: Path) -> N
     repository = tmp_path / "repo"
     _init_git_repo(repository)
     worktree = tmp_path / "repair-worktree"
-    sandbox = RepairSandbox.create(
-        repository_root=repository, worktree_path=worktree
-    )
+    sandbox = RepairSandbox.create(repository_root=repository, worktree_path=worktree)
     try:
         frozen = (worktree / "PLAN.md").read_bytes()
         with pytest.raises(PermissionError, match="protected paths"):
@@ -573,9 +541,7 @@ def test_repair_sandbox_rejects_protected_and_stale_targets(tmp_path: Path) -> N
 def test_phase12_trial_side_states_are_explicit() -> None:
     require_trial_transition(TrialState.RETRYABLE_FAILURE, TrialState.QUARANTINED)
     require_trial_transition(TrialState.QUARANTINED, TrialState.AI_REPAIR_PENDING)
-    require_trial_transition(
-        TrialState.AI_REPAIR_PENDING, TrialState.AI_REPAIR_EXHAUSTED
-    )
+    require_trial_transition(TrialState.AI_REPAIR_PENDING, TrialState.AI_REPAIR_EXHAUSTED)
     with pytest.raises(ValueError):
         require_trial_transition(TrialState.COMPLETE, TrialState.AI_REPAIR_PENDING)
 
