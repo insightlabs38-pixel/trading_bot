@@ -287,9 +287,7 @@ class MultiDecayTemporalOperator(nn.Module):
 
     def forward(self, sequence: Tensor) -> Tensor:
         if sequence.ndim != 3 or int(sequence.shape[-1]) != self.features:
-            raise ValueError(
-                f"multi-decay module expects [batch, time, {self.features}] input"
-            )
+            raise ValueError(f"multi-decay module expects [batch, time, {self.features}] input")
         projected = self.input_projection(sequence)
         mixed = multi_decay_dispatch(
             projected,
@@ -468,8 +466,8 @@ class MultiScaleMarketMixerReturnModel(TradingModel):
                 batch_first=True,
                 norm_first=False,
             )
-            self.cross_sectional_encoder: nn.TransformerEncoder | None = (
-                nn.TransformerEncoder(cross_layer, num_layers=1)
+            self.cross_sectional_encoder: nn.TransformerEncoder | None = nn.TransformerEncoder(
+                cross_layer, num_layers=1
             )
         else:
             self.cross_sectional_encoder = None
@@ -544,9 +542,7 @@ class HeterogeneousMoEReturnModel(TradingModel):
         self.model_features = model_features
         self.max_sequence_length = max_sequence_length
         self.feature_encoder = nn.Linear(input_features, model_features)
-        self.position_embedding = nn.Parameter(
-            torch.zeros(1, max_sequence_length, model_features)
-        )
+        self.position_embedding = nn.Parameter(torch.zeros(1, max_sequence_length, model_features))
         nn.init.normal_(self.position_embedding, mean=0.0, std=0.02)
 
         experts: list[nn.Module] = [
@@ -602,16 +598,15 @@ class HeterogeneousMoEReturnModel(TradingModel):
                 continue
             expert_output = cast(Tensor, expert(encoded[assigned]))
             contribution = torch.zeros_like(sample_state)
-            contribution[assigned] = (
-                expert_output * sparse_weights[assigned, expert_index].unsqueeze(-1)
-            )
+            contribution[assigned] = expert_output * sparse_weights[
+                assigned, expert_index
+            ].unsqueeze(-1)
             combined = combined + contribution
 
         detached = sparse_weights.detach()
-        entropy = -(
-            detached
-            * torch.log(detached.clamp_min(torch.finfo(detached.dtype).eps))
-        ).sum(dim=-1)
+        entropy = -(detached * torch.log(detached.clamp_min(torch.finfo(detached.dtype).eps))).sum(
+            dim=-1
+        )
         self._last_router_diagnostics = MoERouterDiagnostics(
             expert_names=self.expert_names,
             assignment_counts=tuple(assignment_counts),
@@ -637,9 +632,7 @@ class HeterogeneousMoEReturnModel(TradingModel):
             self.heads,
         )
         shared = sum(
-            parameter.numel()
-            for module in shared_modules
-            for parameter in module.parameters()
+            parameter.numel() for module in shared_modules for parameter in module.parameters()
         )
         shared += self.position_embedding.numel()
         expert_counts = sorted(
