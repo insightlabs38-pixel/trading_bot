@@ -50,8 +50,7 @@ def run_cpu_golden_canary(
 
     predictions = tuple(slope * value + intercept for value in xs)
     mse = sum(
-        (actual - target) ** 2
-        for actual, target in zip(predictions, expected, strict=True)
+        (actual - target) ** 2 for actual, target in zip(predictions, expected, strict=True)
     ) / len(xs)
 
     started = perf_counter()
