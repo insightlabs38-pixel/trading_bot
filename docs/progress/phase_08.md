@@ -79,7 +79,7 @@ The Phase 8 CPU test fixture uses one deterministic cross-sectional split. For e
 
 ## CPU verification evidence
 
-Permanent read-only GitHub Actions run **32433083576** / job **96628678153** verified the core implementation before authoritative tracker reconciliation. It checked the exact PR head `d286551c5d0815ce22b26f24d72fa262faaa5871` through synthetic merge ref `7fb8abc` on Python **3.12.3**.
+Permanent read-only GitHub Actions run **32433593949** / job **96630186230** verified the reconciled implementation/tracker tree at exact PR head `a56de4508cd8b5927179df45d3ae43b847c613e7` on Python **3.12.3**. The workflow tested synthetic merge ref `b8bb4e8a78e3730f3e32fdc117cf722df3fbc5ad` into base `4faaaf4f7da8a891fbc45229dca165ebe96aa16e`.
 
 ```text
 uv lock --check: pass
@@ -88,10 +88,10 @@ Ruff: pass
 formatting: 108 files already formatted
 mypy: success, no issues in 56 source files
 compileall: pass
-pytest: 279 passed, 1 skipped in 13.80s
+pytest: 279 passed, 1 skipped in 14.85s
 ```
 
-The single skip remains the existing opt-in Phase 2 real-S3 provider gate and is unrelated to Phase 8. A final read-only run after tracker reconciliation will close the CPU branch gate without changing the architecture acceptance semantics above.
+The single skip remains the existing opt-in Phase 2 real-S3 provider gate and is unrelated to Phase 8. The permanent workflow uses read-only repository contents permission.
 
 ## Remaining Phase 8 acceptance
 
